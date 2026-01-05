@@ -151,7 +151,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
             //
             // For multiple origins (dev + production):
             //   .allowedOrigins("http://localhost:3000", "https://myapp.com")
-            .allowedOrigins("http://localhost:3000")
+            .allowedOrigins("http://localhost:3000", "http://localhost:5173")
             
             // ------------------------------------------------------------
             // ALLOWED METHODS: Which HTTP methods are permitted

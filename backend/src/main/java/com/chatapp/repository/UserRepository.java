@@ -8,7 +8,10 @@ import com.chatapp.model.User;  // The User entity we're managing
 
 // Spring Data JPA - provides automatic database operations
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;  // Container that may or may not contain a value
 
 /**
@@ -130,4 +133,48 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * @return true if a user with this email exists, false otherwise
      */
     boolean existsByEmail(String email);
+    
+    // ========================================================================
+    // USER SEARCH METHODS - For Phase 2 User Discovery
+    // ========================================================================
+    
+    /**
+     * Searches for users by email containing the search term.
+     * Case-insensitive search. Excludes the current user from results.
+     * 
+     * @param emailPattern The pattern to search for in email
+     * @param excludeUserId The ID of the current user to exclude
+     * @return List of users matching the search criteria
+     */
+    @Query("SELECT u FROM User u WHERE u.id != :excludeUserId " +
+           "AND LOWER(u.email) LIKE LOWER(CONCAT('%', :pattern, '%'))")
+    List<User> searchByEmail(@Param("pattern") String emailPattern, 
+                             @Param("excludeUserId") Long excludeUserId);
+    
+    /**
+     * Searches for users by display name containing the search term.
+     * Case-insensitive search. Excludes the current user from results.
+     * 
+     * @param displayNamePattern The pattern to search for in display name
+     * @param excludeUserId The ID of the current user to exclude
+     * @return List of users matching the search criteria
+     */
+    @Query("SELECT u FROM User u WHERE u.id != :excludeUserId " +
+           "AND LOWER(u.displayName) LIKE LOWER(CONCAT('%', :pattern, '%'))")
+    List<User> searchByDisplayName(@Param("pattern") String displayNamePattern, 
+                                   @Param("excludeUserId") Long excludeUserId);
+    
+    /**
+     * Searches for users by email OR display name containing the search term.
+     * Case-insensitive search. Excludes the current user from results.
+     * 
+     * @param pattern The pattern to search for
+     * @param excludeUserId The ID of the current user to exclude
+     * @return List of users matching the search criteria
+     */
+    @Query("SELECT u FROM User u WHERE u.id != :excludeUserId " +
+           "AND (LOWER(u.email) LIKE LOWER(CONCAT('%', :pattern, '%')) " +
+           "OR LOWER(u.displayName) LIKE LOWER(CONCAT('%', :pattern, '%')))")
+    List<User> searchByEmailOrDisplayName(@Param("pattern") String pattern, 
+                                          @Param("excludeUserId") Long excludeUserId);
 }

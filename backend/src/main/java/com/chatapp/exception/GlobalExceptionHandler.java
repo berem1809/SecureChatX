@@ -227,6 +227,124 @@ public class GlobalExceptionHandler {
     }
 
     // ========================================================================
+    // CHAT & CONVERSATION EXCEPTION HANDLERS
+    // ========================================================================
+
+    /**
+     * Handles ChatRequestAlreadyExistsException - when duplicate chat request is sent.
+     * HTTP 409 CONFLICT
+     */
+    @ExceptionHandler(ChatRequestAlreadyExistsException.class)
+    public ResponseEntity<Map<String, Object>> handleChatRequestAlreadyExists(ChatRequestAlreadyExistsException ex) {
+        logger.warn("Chat request already exists: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * Handles ConversationAlreadyExistsException - when duplicate conversation is created.
+     * HTTP 409 CONFLICT
+     */
+    @ExceptionHandler(ConversationAlreadyExistsException.class)
+    public ResponseEntity<Map<String, Object>> handleConversationAlreadyExists(ConversationAlreadyExistsException ex) {
+        logger.warn("Conversation already exists: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * Handles ConversationAccessDeniedException - when user lacks conversation access.
+     * HTTP 403 FORBIDDEN
+     */
+    @ExceptionHandler(ConversationAccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleConversationAccessDenied(ConversationAccessDeniedException ex) {
+        logger.warn("Conversation access denied: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    /**
+     * Handles ChatRequestNotFoundException - when chat request is not found.
+     * HTTP 404 NOT FOUND
+     */
+    @ExceptionHandler(ChatRequestNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleChatRequestNotFound(ChatRequestNotFoundException ex) {
+        logger.warn("Chat request not found: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    /**
+     * Handles ConversationNotFoundException - when conversation is not found.
+     * HTTP 404 NOT FOUND
+     */
+    @ExceptionHandler(ConversationNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleConversationNotFound(ConversationNotFoundException ex) {
+        logger.warn("Conversation not found: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    // ========================================================================
+    // GROUP EXCEPTION HANDLERS
+    // ========================================================================
+
+    /**
+     * Handles GroupAccessDeniedException - when user lacks group access.
+     * HTTP 403 FORBIDDEN
+     */
+    @ExceptionHandler(GroupAccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleGroupAccessDenied(GroupAccessDeniedException ex) {
+        logger.warn("Group access denied: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    /**
+     * Handles GroupNotFoundException - when group is not found.
+     * HTTP 404 NOT FOUND
+     */
+    @ExceptionHandler(GroupNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleGroupNotFound(GroupNotFoundException ex) {
+        logger.warn("Group not found: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    /**
+     * Handles GroupInvitationNotFoundException - when group invitation is not found.
+     * HTTP 404 NOT FOUND
+     */
+    @ExceptionHandler(GroupInvitationNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleGroupInvitationNotFound(GroupInvitationNotFoundException ex) {
+        logger.warn("Group invitation not found: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    /**
+     * Handles GroupInvitationAlreadyExistsException - when duplicate invitation is sent.
+     * HTTP 409 CONFLICT
+     */
+    @ExceptionHandler(GroupInvitationAlreadyExistsException.class)
+    public ResponseEntity<Map<String, Object>> handleGroupInvitationAlreadyExists(GroupInvitationAlreadyExistsException ex) {
+        logger.warn("Group invitation already exists: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * Handles UserAlreadyGroupMemberException - when user is already a group member.
+     * HTTP 409 CONFLICT
+     */
+    @ExceptionHandler(UserAlreadyGroupMemberException.class)
+    public ResponseEntity<Map<String, Object>> handleUserAlreadyGroupMember(UserAlreadyGroupMemberException ex) {
+        logger.warn("User already group member: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * Handles UserNotFoundException - when user is not found.
+     * HTTP 404 NOT FOUND
+     */
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleUserNotFound(UserNotFoundException ex) {
+        logger.warn("User not found: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    // ========================================================================
     // GENERIC EXCEPTION HANDLERS (Catch-all)
     // ========================================================================
 

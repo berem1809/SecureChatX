@@ -106,6 +106,28 @@ public class RateLimitConfig {
      * More generous limit (100/min) for normal API operations.
      */
     private final Map<String, Bucket> generalBuckets = new ConcurrentHashMap<>();
+    
+    // ========================================================================
+    // PHASE 2 - Chat Request and Group Invitation Buckets
+    // ========================================================================
+    
+    /**
+     * Stores rate limit buckets for CHAT REQUEST operations.
+     * Moderate limit (20/minute) to prevent spam while allowing normal usage.
+     */
+    private final Map<String, Bucket> chatRequestBuckets = new ConcurrentHashMap<>();
+    
+    /**
+     * Stores rate limit buckets for GROUP INVITATION operations.
+     * Moderate limit (20/minute) to prevent invitation spam.
+     */
+    private final Map<String, Bucket> groupInvitationBuckets = new ConcurrentHashMap<>();
+    
+    /**
+     * Stores rate limit buckets for USER SEARCH operations.
+     * Higher limit (30/minute) since search is a common operation.
+     */
+    private final Map<String, Bucket> userSearchBuckets = new ConcurrentHashMap<>();
 
     // ========================================================================
     // PUBLIC METHODS - Called by RateLimitFilter to get/create buckets
@@ -164,6 +186,55 @@ public class RateLimitConfig {
      */
     public Bucket getGeneralBucket(String ipAddress) {
         return generalBuckets.computeIfAbsent(ipAddress, k -> createGeneralBucket());
+    }
+    
+    // ========================================================================
+    // PHASE 2 - Chat Request, Group Invitation, and User Search Buckets
+    // ========================================================================
+    
+    /**
+     * Gets (or creates) a rate limit bucket for CHAT REQUEST operations.
+     * 
+     * Moderate limit (20/minute) because:
+     * - Sending chat requests is a normal but infrequent action
+     * - Prevents spam/harassment through mass chat requests
+     * - Still allows reasonable usage patterns
+     * 
+     * @param ipAddress The client's IP address
+     * @return Bucket for this IP's chat request operations
+     */
+    public Bucket getChatRequestBucket(String ipAddress) {
+        return chatRequestBuckets.computeIfAbsent(ipAddress, k -> createChatRequestBucket());
+    }
+    
+    /**
+     * Gets (or creates) a rate limit bucket for GROUP INVITATION operations.
+     * 
+     * Moderate limit (20/minute) because:
+     * - Group invitations are admin-only but can be abused
+     * - Prevents invitation spam
+     * - Still allows admins to invite multiple members
+     * 
+     * @param ipAddress The client's IP address
+     * @return Bucket for this IP's group invitation operations
+     */
+    public Bucket getGroupInvitationBucket(String ipAddress) {
+        return groupInvitationBuckets.computeIfAbsent(ipAddress, k -> createGroupInvitationBucket());
+    }
+    
+    /**
+     * Gets (or creates) a rate limit bucket for USER SEARCH operations.
+     * 
+     * Higher limit (30/minute) because:
+     * - Search is a common operation while looking for users
+     * - Each keystroke might trigger a search (debounced)
+     * - Still prevents abuse of the search endpoint
+     * 
+     * @param ipAddress The client's IP address
+     * @return Bucket for this IP's user search operations
+     */
+    public Bucket getUserSearchBucket(String ipAddress) {
+        return userSearchBuckets.computeIfAbsent(ipAddress, k -> createUserSearchBucket());
     }
 
     // ========================================================================
@@ -246,6 +317,64 @@ public class RateLimitConfig {
         );
         return Bucket.builder().addLimit(limit).build();
     }
+    
+    // ========================================================================
+    // PHASE 2 - Create Buckets for Chat, Group, and Search Operations
+    // ========================================================================
+    
+    /**
+     * Creates a new bucket for CHAT REQUEST rate limiting.
+     * 
+     * MODERATE LIMIT: 20 requests per minute because:
+     * - Chat requests are moderately sensitive (can be used for harassment)
+     * - Normal users only send a few chat requests at a time
+     * - 20/min allows bulk adding while preventing spam
+     * 
+     * @return New bucket configured for chat request rate limiting
+     */
+    private Bucket createChatRequestBucket() {
+        Bandwidth limit = Bandwidth.classic(
+            20,                                    // 20 tokens
+            Refill.greedy(20, Duration.ofMinutes(1)) // Refill 20 per minute
+        );
+        return Bucket.builder().addLimit(limit).build();
+    }
+    
+    /**
+     * Creates a new bucket for GROUP INVITATION rate limiting.
+     * 
+     * MODERATE LIMIT: 20 requests per minute because:
+     * - Group invitations can be used to spam users
+     * - Admins may need to invite several members at once
+     * - 20/min balances usability with protection
+     * 
+     * @return New bucket configured for group invitation rate limiting
+     */
+    private Bucket createGroupInvitationBucket() {
+        Bandwidth limit = Bandwidth.classic(
+            20,                                    // 20 tokens
+            Refill.greedy(20, Duration.ofMinutes(1)) // Refill 20 per minute
+        );
+        return Bucket.builder().addLimit(limit).build();
+    }
+    
+    /**
+     * Creates a new bucket for USER SEARCH rate limiting.
+     * 
+     * HIGHER LIMIT: 30 requests per minute because:
+     * - Search is frequently used (autocomplete, finding users)
+     * - Not as sensitive as creating relationships
+     * - 30/min allows good UX while preventing abuse
+     * 
+     * @return New bucket configured for user search rate limiting
+     */
+    private Bucket createUserSearchBucket() {
+        Bandwidth limit = Bandwidth.classic(
+            30,                                    // 30 tokens
+            Refill.greedy(30, Duration.ofMinutes(1)) // Refill 30 per minute
+        );
+        return Bucket.builder().addLimit(limit).build();
+    }
 
     // ========================================================================
     // MAINTENANCE METHODS
@@ -270,8 +399,11 @@ public class RateLimitConfig {
      * - Use a cache library with automatic eviction (like Caffeine)
      */
     public void clearBuckets() {
-        loginBuckets.clear();     // Remove all login buckets
-        registerBuckets.clear();  // Remove all registration buckets
-        generalBuckets.clear();   // Remove all general buckets
+        loginBuckets.clear();           // Remove all login buckets
+        registerBuckets.clear();        // Remove all registration buckets
+        generalBuckets.clear();         // Remove all general buckets
+        chatRequestBuckets.clear();     // Remove all chat request buckets
+        groupInvitationBuckets.clear(); // Remove all group invitation buckets
+        userSearchBuckets.clear();      // Remove all user search buckets
     }
 }

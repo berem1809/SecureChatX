@@ -195,6 +195,7 @@ public class AuthController {
                 <html>
                 <head>
                     <title>Email Verified</title>
+                    <meta http-equiv="refresh" content="3;url=http://localhost:5173/login" />
                     <style>
                         body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
                         .success { color: green; }
@@ -203,7 +204,8 @@ public class AuthController {
                 <body>
                     <h1 class="success">Email Verified Successfully!</h1>
                     <p>Your email has been verified. You can now log in to your account.</p>
-                    <p><a href="http://localhost:3000/login">Go to Login</a></p>
+                    <p>Redirecting to login page in 3 seconds...</p>
+                    <p><a href="http://localhost:5173/login">Click here if not redirected</a></p>
                 </body>
                 </html>
                 """;
