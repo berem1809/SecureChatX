@@ -154,11 +154,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
         // Step 2: Get the request path (e.g., "/api/auth/login")
         String path = request.getRequestURI();
         
-        // Step 3: Get the appropriate bucket for this path + IP
-        // Different endpoints have different rate limits
-        Bucket bucket = getBucketForPath(path, clientIp);
+        // Step 3: Get the HTTP method for more granular rate limiting
+        String method = request.getMethod();
         
-        // Step 4: Try to consume 1 token from the bucket
+        // Step 4: Get the appropriate bucket for this path + IP + method
+        // Different endpoints have different rate limits
+        Bucket bucket = getBucketForPath(path, clientIp, method);
+        
+        // Step 5: Try to consume 1 token from the bucket
         // tryConsume(1) is atomic and thread-safe
         if (bucket.tryConsume(1)) {
             // Token consumed successfully - request is allowed
@@ -189,13 +192,22 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * Different endpoints have different security needs:
      * - Login: Low limit (5/min) - prevent brute force
      * - Register: Low limit (3/min) - prevent spam accounts
+     * - Chat requests: Moderate (20/min) - prevent spam
+     * - Group invitations: Moderate (20/min) - prevent invitation spam
+     * - User search: Higher (30/min) - common operation
      * - General: Higher limit (100/min) - normal usage
      * 
      * @param path The request URI (e.g., "/api/auth/login")
      * @param clientIp The client's IP address
+     * @param method The HTTP method (GET, POST, etc.)
      * @return The Bucket for rate limiting
      */
-    private Bucket getBucketForPath(String path, String clientIp) {
+    private Bucket getBucketForPath(String path, String clientIp, String method) {
+        // Check if it's a modifying request (POST, PUT, DELETE)
+        boolean isModifyingRequest = "POST".equalsIgnoreCase(method) || 
+                                     "PUT".equalsIgnoreCase(method) || 
+                                     "DELETE".equalsIgnoreCase(method);
+        
         if (path.contains("/api/auth/login")) {
             // Login endpoint: 5 requests per minute
             // Prevents password brute force attacks
@@ -205,6 +217,21 @@ public class RateLimitFilter extends OncePerRequestFilter {
             // Register endpoint: 3 requests per minute
             // Prevents spam account creation
             return rateLimitConfig.getRegisterBucket(clientIp);
+            
+        } else if (path.contains("/api/chat-requests") && isModifyingRequest) {
+            // Chat request creation: 20 requests per minute
+            // Prevents spam chat requests
+            return rateLimitConfig.getChatRequestBucket(clientIp);
+            
+        } else if (path.contains("/api/groups") && path.contains("/invitations") && isModifyingRequest) {
+            // Group invitation creation: 20 requests per minute
+            // Prevents invitation spam
+            return rateLimitConfig.getGroupInvitationBucket(clientIp);
+            
+        } else if (path.contains("/api/users/search")) {
+            // User search: 30 requests per minute
+            // Common operation but still needs protection
+            return rateLimitConfig.getUserSearchBucket(clientIp);
             
         } else {
             // All other endpoints: 100 requests per minute

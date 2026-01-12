@@ -352,6 +352,8 @@ eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0ZXN0dXNlckBleGFtcGxlLmNvbSIsImlhdCI6MTcwNDM2NDY
 
 **Purpose:** Invalidate refresh token and end session.
 
+> ⚠️ **IMPORTANT:** Logout endpoint requires authentication! You must include the Bearer token in the Authorization header.
+
 #### Request Setup:
 - **Method:** `POST`
 - **URL:** `{{base_url}}/api/auth/logout`
@@ -359,6 +361,7 @@ eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0ZXN0dXNlckBleGFtcGxlLmNvbSIsImlhdCI6MTcwNDM2NDY
   | Key | Value |
   |-----|-------|
   | Content-Type | application/json |
+  | Authorization | Bearer {{accessToken}} |
 
 (Cookie will be sent automatically)
 
@@ -367,6 +370,14 @@ eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0ZXN0dXNlckBleGFtcGxlLmNvbSIsImlhdCI6MTcwNDM2NDY
 ✅ **Success (200 OK):**
 ```
 (empty body)
+```
+
+❌ **If No Token Provided (401 Unauthorized):**
+```json
+{
+    "error": "Unauthorized",
+    "message": "Full authentication is required to access this resource"
+}
 ```
 
 #### Verify Logout Worked:

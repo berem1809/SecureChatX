@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 // Spring components
 import org.springframework.security.crypto.password.PasswordEncoder;  // BCrypt encoder
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;  // For atomic operations
 
 import java.util.HashMap;
 import java.util.Map;
@@ -199,6 +200,7 @@ class AuthServiceImpl implements AuthService {
      * @throws EmailAlreadyExistsException if email already registered
      */
     @Override
+    @Transactional  // Rollback MySQL if Redis/Email fails!
     public void register(RegisterRequest request) {
         logger.info("Register method called for: {}", request.getEmail());
         
@@ -221,15 +223,32 @@ class AuthServiceImpl implements AuthService {
         user = userRepository.save(user);  // Persist to MySQL, gets auto-generated ID
         logger.info("User saved to MySQL with id: {}", user.getId());
 
-        // STEP 3: Create verification token in Redis
-        // Token is UUID, stored with 24-hour TTL
-        String token = verificationTokenService.createVerificationToken(user.getId());
-        logger.info("Verification token created in Redis for user: {}", user.getEmail());
+        // STEP 3 & 4: Create token and send email
+        // If either fails, we need to rollback everything
+        String token = null;
+        try {
+            // STEP 3: Create verification token in Redis
+            // Token is UUID, stored with 24-hour TTL
+            token = verificationTokenService.createVerificationToken(user.getId());
+            logger.info("Verification token created in Redis for user: {}", user.getEmail());
 
-        // STEP 4: Send verification email
-        // Email contains link: /api/auth/verify?token={uuid}
-        logger.info("Sending verification email to: {}", user.getEmail());
-        emailService.sendVerificationEmail(user.getEmail(), token);
+            // STEP 4: Send verification email
+            // Email contains link: /api/auth/verify?token={uuid}
+            logger.info("Sending verification email to: {}", user.getEmail());
+            emailService.sendVerificationEmail(user.getEmail(), token);
+        } catch (Exception e) {
+            // Clean up Redis token if it was created
+            if (token != null) {
+                try {
+                    verificationTokenService.deleteByToken(token);
+                } catch (Exception ignored) {
+                    logger.warn("Failed to cleanup Redis token during rollback");
+                }
+            }
+            // Re-throw to trigger @Transactional rollback for MySQL
+            logger.error("Registration failed for {}: {}", request.getEmail(), e.getMessage());
+            throw new RuntimeException("Registration failed: " + e.getMessage(), e);
+        }
     }
 
     // ========================================================================

@@ -197,15 +197,18 @@ public class SecurityConfig {
             // This is where we define which endpoints are public vs protected.
             // Rules are evaluated in ORDER - first match wins!
             .authorizeHttpRequests(auth -> auth
+                // PROTECTED AUTH ENDPOINTS: Require authentication
+                // Logout requires valid JWT to invalidate the session
+                .requestMatchers("/api/auth/logout").authenticated()
+                
                 // PUBLIC ENDPOINTS: No authentication required
-                // "/api/auth/**" matches:
-                //   - /api/auth/register
-                //   - /api/auth/login
-                //   - /api/auth/verify
-                //   - /api/auth/refresh
-                //   - /api/auth/logout
-                //   - /api/auth/anything/else
-                .requestMatchers("/api/auth/**").permitAll()
+                // These endpoints need to be accessible without a token:
+                //   - /api/auth/register - New users can't have a token yet
+                //   - /api/auth/login - Users login to get a token
+                //   - /api/auth/verify - Email verification with token in URL
+                //   - /api/auth/refresh - Refresh expired access tokens
+                .requestMatchers("/api/auth/register", "/api/auth/login", 
+                                 "/api/auth/verify", "/api/auth/refresh").permitAll()
                 
                 // PROTECTED ENDPOINTS: Must be authenticated
                 // anyRequest() = all other requests not matched above
