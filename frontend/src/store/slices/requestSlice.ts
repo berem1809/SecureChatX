@@ -5,6 +5,7 @@ import { ChatRequest } from '../../types';
 interface RequestState {
   receivedRequests: ChatRequest[];
   sentRequests: ChatRequest[];
+  allReceivedRequests: ChatRequest[]; // includes all statuses
   isLoading: boolean;
   error: string | null;
   successMessage: string | null;
@@ -13,18 +14,36 @@ interface RequestState {
 const initialState: RequestState = {
   receivedRequests: [],
   sentRequests: [],
+  allReceivedRequests: [],
   isLoading: false,
   error: null,
   successMessage: null,
 };
+
+// Helper to map backend response to frontend ChatRequest type
+const mapChatRequest = (data: any): ChatRequest => ({
+  id: data.id,
+  senderId: data.sender?.id || data.senderId,
+  senderName: data.sender?.displayName || data.senderName,
+  senderEmail: data.sender?.email || data.senderEmail,
+  receiverId: data.receiver?.id || data.receiverId,
+  receiverName: data.receiver?.displayName || data.receiverName,
+  receiverEmail: data.receiver?.email || data.receiverEmail,
+  // Normalize status to uppercase to match type union
+  status: (data.status || 'PENDING').toUpperCase() as ChatRequest['status'],
+  createdAt: data.createdAt,
+  updatedAt: data.updatedAt,
+  sender: data.sender,
+  receiver: data.receiver,
+});
 
 // Async thunks
 export const fetchReceivedRequests = createAsyncThunk(
   'requests/fetchReceived',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get<ChatRequest[]>('/api/chat-requests/received');
-      return response.data;
+      const response = await api.get('/api/chat-requests/received');
+      return response.data.map(mapChatRequest);
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch requests');
     }
@@ -35,8 +54,8 @@ export const fetchSentRequests = createAsyncThunk(
   'requests/fetchSent',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get<ChatRequest[]>('/api/chat-requests/sent');
-      return response.data;
+      const response = await api.get('/api/chat-requests/sent');
+      return response.data.map(mapChatRequest);
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch requests');
     }
@@ -59,7 +78,7 @@ export const acceptRequest = createAsyncThunk(
   'requests/accept',
   async (requestId: number, { rejectWithValue }) => {
     try {
-      await api.post(`/api/chat-requests/${requestId}/accept`);
+      await api.post(`/api/chat-requests/${requestId}/action`, { action: 'ACCEPT' });
       return requestId;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to accept request');
@@ -71,7 +90,7 @@ export const rejectRequest = createAsyncThunk(
   'requests/reject',
   async (requestId: number, { rejectWithValue }) => {
     try {
-      await api.post(`/api/chat-requests/${requestId}/reject`);
+      await api.post(`/api/chat-requests/${requestId}/action`, { action: 'REJECT' });
       return requestId;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to reject request');
@@ -90,6 +109,7 @@ const requestSlice = createSlice({
     clearRequests: (state) => {
       state.receivedRequests = [];
       state.sentRequests = [];
+      state.allReceivedRequests = [];
     },
   },
   extraReducers: (builder) => {
@@ -100,7 +120,8 @@ const requestSlice = createSlice({
       })
       .addCase(fetchReceivedRequests.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.receivedRequests = action.payload.filter((r) => r.status === 'PENDING');
+        state.allReceivedRequests = action.payload;
+        state.receivedRequests = action.payload.filter((r: ChatRequest) => r.status === 'PENDING');
       })
       .addCase(fetchReceivedRequests.rejected, (state, action) => {
         state.isLoading = false;

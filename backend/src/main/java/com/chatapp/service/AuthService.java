@@ -357,8 +357,8 @@ class AuthServiceImpl implements AuthService {
 
         logger.info("User logged in: {}", user.getEmail());
         
-        // STEP 6: Return tokens to client
-        return new AuthResponse(accessToken, refreshToken);
+        // STEP 6: Return tokens and user info to client
+        return new AuthResponse(accessToken, refreshToken, user.getId(), user.getEmail(), user.getDisplayName());
     }
 
     // ========================================================================

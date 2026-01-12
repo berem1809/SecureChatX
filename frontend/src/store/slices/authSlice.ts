@@ -31,7 +31,14 @@ export const login = createAsyncThunk(
     try {
       const response = await api.post<AuthResponse>('/api/auth/login', { email, password });
       localStorage.setItem('accessToken', response.data.accessToken);
-      return { token: response.data.accessToken, email };
+      return { 
+        token: response.data.accessToken, 
+        user: {
+          id: response.data.userId || 0,
+          email: response.data.email || email,
+          displayName: response.data.displayName || email.split('@')[0],
+        }
+      };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Login failed');
     }
@@ -73,6 +80,18 @@ export const refreshToken = createAsyncThunk('auth/refresh', async (_, { rejectW
   }
 });
 
+export const fetchCurrentUser = createAsyncThunk(
+  'auth/fetchCurrentUser',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get<{ id: number; email: string; displayName: string }>('/api/users/me');
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch user');
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -96,11 +115,7 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.token = action.payload.token;
         state.isAuthenticated = true;
-        state.user = {
-          id: 0,
-          email: action.payload.email,
-          displayName: action.payload.email.split('@')[0],
-        };
+        state.user = action.payload.user;
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
@@ -133,6 +148,19 @@ const authSlice = createSlice({
         state.token = null;
         state.isAuthenticated = false;
         state.user = null;
+      })
+      // Fetch current user
+      .addCase(fetchCurrentUser.fulfilled, (state, action) => {
+        state.user = action.payload;
+      })
+      .addCase(fetchCurrentUser.rejected, (state, action) => {
+        // Only logout if there's no user already (failed initial fetch)
+        // Don't logout if user is already set (could be a temporary network issue)
+        if (!state.user) {
+          state.token = null;
+          state.isAuthenticated = false;
+          localStorage.removeItem('accessToken');
+        }
       });
   },
 });

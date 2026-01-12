@@ -12,8 +12,12 @@ import {
   DialogContent,
   DialogContentText,
   CircularProgress,
+  InputAdornment,
+  IconButton,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { login, clearError } from '../store/slices/authSlice';
@@ -21,6 +25,7 @@ import { login, clearError } from '../store/slices/authSlice';
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const dispatch = useAppDispatch();
@@ -32,7 +37,7 @@ const LoginPage: React.FC = () => {
       // Show dialog briefly then navigate
       const timer = setTimeout(() => {
         setDialogOpen(false);
-        navigate('/chat');
+        navigate('/home');
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -79,11 +84,24 @@ const LoginPage: React.FC = () => {
             <TextField
               fullWidth
               label="Password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               margin="normal"
               required
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                      aria-label="toggle password visibility"
+                    >
+                      {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
             <Button
               type="submit"

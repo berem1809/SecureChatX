@@ -73,6 +73,13 @@ public class AuthResponse {
     private String refreshToken;
 
     /**
+     * User information returned after successful login.
+     */
+    private Long userId;
+    private String email;
+    private String displayName;
+
+    /**
      * Default constructor required by Jackson for JSON serialization.
      */
     public AuthResponse() {}
@@ -86,6 +93,17 @@ public class AuthResponse {
     public AuthResponse(String accessToken, String refreshToken) {
         this.accessToken = accessToken;
         this.refreshToken = refreshToken;
+    }
+
+    /**
+     * Constructor with tokens and user info.
+     */
+    public AuthResponse(String accessToken, String refreshToken, Long userId, String email, String displayName) {
+        this.accessToken = accessToken;
+        this.refreshToken = refreshToken;
+        this.userId = userId;
+        this.email = email;
+        this.displayName = displayName;
     }
     
     // ========================================================================
@@ -107,4 +125,13 @@ public class AuthResponse {
      * since we send it via HttpOnly cookie instead.
      */
     public void setRefreshToken(String refreshToken) { this.refreshToken = refreshToken; }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    public String getDisplayName() { return displayName; }
+    public void setDisplayName(String displayName) { this.displayName = displayName; }
 }

@@ -119,7 +119,8 @@ class ChatRequestServiceTest {
             ChatRequestCreateRequest request = new ChatRequestCreateRequest();
             request.setReceiverId(1L); // Same as sender
 
-            // No mock needed - exception thrown before user lookup
+            // Mock receiver lookup (which happens first)
+            when(userRepository.findById(1L)).thenReturn(Optional.of(sender));
 
             // Act & Assert
             assertThrows(IllegalArgumentException.class,
@@ -134,7 +135,7 @@ class ChatRequestServiceTest {
             ChatRequestCreateRequest request = new ChatRequestCreateRequest();
             request.setReceiverId(999L);
 
-            when(userRepository.findById(1L)).thenReturn(Optional.of(sender));
+            // Only mock receiver lookup - sender is checked after receiver is found
             when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
             // Act & Assert

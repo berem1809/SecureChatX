@@ -8,52 +8,52 @@ import { clearRequests } from '../store/slices/requestSlice';
 
 const Navbar: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { isAuthenticated } = useAppSelector((state) => state.auth);
+  const { user } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     await dispatch(logout());
     dispatch(clearChat());
     dispatch(clearRequests());
-    navigate('/login');
+    navigate('/');
   };
 
   return (
-    <AppBar position="static" color="default" elevation={1}>
+    <AppBar position="static" sx={{ bgcolor: '#1a1a2e' }}>
       <Container maxWidth="lg">
         <Toolbar disableGutters>
           <Typography
             variant="h6"
             component={Link}
-            to="/"
-            sx={{ textDecoration: 'none', color: 'inherit', flexGrow: 1 }}
+            to="/home"
+            sx={{ textDecoration: 'none', color: 'inherit', flexGrow: 1, fontWeight: 'bold' }}
           >
             ChatApp
           </Typography>
 
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            {isAuthenticated ? (
-              <>
-                <Button component={Link} to="/chat">
-                  Chat
-                </Button>
-                <Button component={Link} to="/requests">
-                  Requests
-                </Button>
-                <Button onClick={handleLogout}>
-                  Logout
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button component={Link} to="/login">
-                  Login
-                </Button>
-                <Button component={Link} to="/register">
-                  Register
-                </Button>
-              </>
-            )}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Button component={Link} to="/home" sx={{ color: 'white' }}>
+              Home
+            </Button>
+            <Button component={Link} to="/chat" sx={{ color: 'white' }}>
+              Chat
+            </Button>
+            <Button component={Link} to="/requests" sx={{ color: 'white' }}>
+              Requests
+            </Button>
+            <Typography variant="body2" sx={{ mx: 2, color: 'rgba(255,255,255,0.7)' }}>
+              {user?.displayName}
+            </Typography>
+            <Button
+              onClick={handleLogout}
+              sx={{
+                bgcolor: '#ffc107',
+                color: '#000',
+                '&:hover': { bgcolor: '#ffca28' },
+              }}
+            >
+              Logout
+            </Button>
           </Box>
         </Toolbar>
       </Container>
