@@ -13,6 +13,8 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ChatPage from './pages/ChatPage';
 import RequestsPage from './pages/RequestsPage';
+import GroupsPage from './pages/GroupsPage';
+import UsersPage from './pages/UsersPage';
 
 // Simple theme with no colors (grayscale)
 const theme = createTheme({
@@ -76,6 +78,28 @@ const AppContent: React.FC = () => {
               <>
                 <Navbar />
                 <RequestsPage />
+              </>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/groups"
+          element={
+            <ProtectedRoute>
+              <>
+                <Navbar />
+                <GroupsPage />
+              </>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute>
+              <>
+                <Navbar />
+                <UsersPage />
               </>
             </ProtectedRoute>
           }

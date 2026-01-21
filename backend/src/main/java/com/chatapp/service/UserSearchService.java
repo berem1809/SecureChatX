@@ -52,6 +52,14 @@ public interface UserSearchService {
      * @return List of matching users
      */
     List<UserSearchResponse> search(String query, Long currentUserId);
+
+    /**
+     * Gets all available users (excluding current user).
+     * 
+     * @param currentUserId The ID of the user performing the search (excluded from results)
+     * @return List of all available users
+     */
+    List<UserSearchResponse> getAllUsers(Long currentUserId);
 }
 
 /**
@@ -94,6 +102,17 @@ class UserSearchServiceImpl implements UserSearchService {
         
         return userRepository.searchByEmailOrDisplayName(query, currentUserId).stream()
             .filter(user -> "ACTIVE".equals(user.getStatus()))     // Only active users
+            .map(UserSearchResponse::fromUser)
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<UserSearchResponse> getAllUsers(Long currentUserId) {
+        logger.debug("Retrieving all available users for user: {}", currentUserId);
+        
+        return userRepository.findAll().stream()
+            .filter(user -> !user.getId().equals(currentUserId))    // Exclude current user
+            .filter(user -> "ACTIVE".equals(user.getStatus()))      // Only active users
             .map(UserSearchResponse::fromUser)
             .collect(Collectors.toList());
     }

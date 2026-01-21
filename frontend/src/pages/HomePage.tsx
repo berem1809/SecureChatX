@@ -1,5 +1,6 @@
 import React from 'react';
-import { Container, Box, Typography, Button, Paper, Grid } from '@mui/material';
+import { Container, Box, Typography, Button, Paper } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { Link } from 'react-router-dom';
 import { useAppSelector } from '../store/hooks';
 import ChatIcon from '@mui/icons-material/Chat';
@@ -23,7 +24,7 @@ const HomePage: React.FC = () => {
 
         {/* Quick Actions */}
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Paper
               sx={{
                 p: 4,
@@ -60,7 +61,7 @@ const HomePage: React.FC = () => {
             </Paper>
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Paper
               sx={{
                 p: 4,

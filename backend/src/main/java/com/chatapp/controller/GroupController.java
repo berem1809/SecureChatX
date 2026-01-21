@@ -72,7 +72,7 @@ public class GroupController {
      * The creator automatically becomes an admin.
      * 
      * POST /api/groups
-     * Body: { "name": "Group Name", "description": "Optional description" }
+     * Body: { "name": "Group Name", "description": "Group purpose/description" }
      * 
      * @param request The group creation request
      * @param authentication The authentication object

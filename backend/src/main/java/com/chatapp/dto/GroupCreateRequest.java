@@ -23,9 +23,11 @@ public class GroupCreateRequest {
     private String name;
 
     /**
-     * Optional description of the group.
+     * Mandatory description of the group purpose.
+     * This helps members understand what the group is for.
      */
-    @Size(max = 500, message = "Description cannot exceed 500 characters")
+    @NotBlank(message = "Group description is required")
+    @Size(min = 1, max = 500, message = "Description must be between 1 and 500 characters")
     private String description;
 
     // ========================================================================

@@ -38,6 +38,10 @@ import {
   acceptRequest,
   rejectRequest,
   clearMessages,
+  createGroup,
+  fetchGroupInvitations,
+  acceptGroupInvitation,
+  rejectGroupInvitation,
 } from '../store/slices/requestSlice';
 import api from '../services/api';
 
@@ -61,13 +65,17 @@ const RequestsPage: React.FC = () => {
   const navigate = useNavigate();
 
   const dispatch = useAppDispatch();
-  const { receivedRequests, sentRequests, isLoading, error, successMessage } = useAppSelector(
+  const { receivedRequests, sentRequests, groupInvitations, isLoading, error, successMessage } = useAppSelector(
     (state) => state.requests
   );
+  
+  // Extract allReceivedRequests at the top level (Rules of Hooks)
+  const allReceivedRequests = useAppSelector((state) => state.requests.allReceivedRequests);
 
   useEffect(() => {
     dispatch(fetchReceivedRequests());
     dispatch(fetchSentRequests());
+    dispatch(fetchGroupInvitations());
   }, [dispatch]);
 
   useEffect(() => {
@@ -86,14 +94,23 @@ const RequestsPage: React.FC = () => {
   };
 
   const handleCreateGroup = async () => {
-    try {
-      await api.post('/api/groups', { name: groupName, description: groupDescription });
+    if (!groupName.trim() || !groupDescription.trim()) {
+      return;
+    }
+    
+    const result = await dispatch(createGroup({
+      name: groupName,
+      description: groupDescription,
+    }));
+    
+    if (createGroup.fulfilled.match(result)) {
       setGroupDialogOpen(false);
       setGroupName('');
       setGroupDescription('');
-      // Show success or navigate to groups
-    } catch (err) {
-      console.error('Failed to create group', err);
+      // Optional: Navigate to groups page or show success
+      setTimeout(() => {
+        navigate('/chat');
+      }, 1000);
     }
   };
 
@@ -105,6 +122,22 @@ const RequestsPage: React.FC = () => {
 
   const handleReject = (requestId: number) => {
     dispatch(rejectRequest(requestId));
+  };
+
+  const handleAcceptGroupInvitation = async (invitationId: number) => {
+    const result = await dispatch(acceptGroupInvitation(invitationId));
+    if (acceptGroupInvitation.fulfilled.match(result)) {
+      dispatch(fetchGroupInvitations());
+      // Navigate to groups page after accepting
+      setTimeout(() => {
+        navigate('/groups');
+      }, 1000);
+    }
+  };
+
+  const handleRejectGroupInvitation = async (invitationId: number) => {
+    await dispatch(rejectGroupInvitation(invitationId));
+    dispatch(fetchGroupInvitations());
   };
 
   const handleStartChat = () => {
@@ -177,27 +210,38 @@ const RequestsPage: React.FC = () => {
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               required
+              error={groupDialogOpen && !groupName.trim()}
+              helperText={groupDialogOpen && !groupName.trim() ? "Group name is required" : ""}
               sx={{ mb: 2 }}
             />
             <TextField
               fullWidth
-              label="Description (optional)"
+              label="Description"
               value={groupDescription}
               onChange={(e) => setGroupDescription(e.target.value)}
+              required
+              error={groupDialogOpen && !groupDescription.trim()}
+              helperText={groupDialogOpen && !groupDescription.trim() ? "Group description is required" : "Describe the purpose of this group"}
               multiline
-              rows={3}
+              rows={4}
             />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              You will be the admin of this group. You can invite members after creation.
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+              ✓ You will be the admin of this group
+              <br />✓ You can invite members after creation
+              <br />✓ You cannot leave while other members are active
             </Typography>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setGroupDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => {
+            setGroupDialogOpen(false);
+            setGroupName('');
+            setGroupDescription('');
+          }}>Cancel</Button>
           <Button 
             onClick={handleCreateGroup} 
             variant="contained" 
-            disabled={!groupName.trim()}
+            disabled={!groupName.trim() || !groupDescription.trim()}
           >
             Create Group
           </Button>
@@ -207,23 +251,25 @@ const RequestsPage: React.FC = () => {
       {/* Requests Tabs */}
       <Paper>
         <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}>
-          {/* Show total received count; pending list is shown inside the tab */}
-          <Tab label={`Received (${useAppSelector((s) => s.requests.allReceivedRequests.length)})`} />
+          {/* Show total received count including chat requests and group invitations */}
+          <Tab label={`Received (${allReceivedRequests.length + groupInvitations.length})`} />
           <Tab label={`Sent (${sentRequests.length})`} />
         </Tabs>
         <Divider />
 
         <TabPanel value={tabValue} index={0}>
           <List>
-            {useAppSelector((state) => state.requests.allReceivedRequests).length === 0 ? (
+            {allReceivedRequests.length === 0 && groupInvitations.length === 0 ? (
               <ListItem>
-                <ListItemText primary="No requests received" />
+                <ListItemText primary="No requests or invitations received" />
               </ListItem>
             ) : (
-              useAppSelector((state) => state.requests.allReceivedRequests).map((request) => {
-                const senderName = request.sender?.displayName || request.senderName || 'Unknown User';
-                const senderEmail = request.sender?.email || request.senderEmail || '';
-                const isPending = request.status === 'PENDING';
+              <>
+                {/* Chat Requests */}
+                {allReceivedRequests.map((request) => {
+                  const senderName = request.sender?.displayName || request.senderName || 'Unknown User';
+                  const senderEmail = request.sender?.email || request.senderEmail || '';
+                  const isPending = request.status === 'PENDING';
                 
                 return (
                   <ListItem
@@ -271,7 +317,61 @@ const RequestsPage: React.FC = () => {
                     />
                   </ListItem>
                 );
-              })
+              })}
+
+              {/* Group Invitations */}
+              {groupInvitations.map((invitation) => (
+                <ListItem
+                  key={`group-inv-${invitation.id}`}
+                  secondaryAction={
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        onClick={() => handleAcceptGroupInvitation(invitation.id)}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        onClick={() => handleRejectGroupInvitation(invitation.id)}
+                      >
+                        Reject
+                      </Button>
+                    </Box>
+                  }
+                >
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: 'success.main' }}>
+                      <GroupIcon />
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <GroupIcon fontSize="small" />
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          {invitation.groupName}
+                        </Typography>
+                      </Box>
+                    }
+                    secondary={
+                      <Box component="span" sx={{ display: 'block' }}>
+                        <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block' }}>
+                          Invited by: {invitation.inviterName}
+                        </Typography>
+                        <Typography component="span" variant="caption" color="text.secondary">
+                          {new Date(invitation.createdAt).toLocaleDateString()} at {new Date(invitation.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </ListItem>
+              ))}
+              </>
             )}
           </List>
         </TabPanel>

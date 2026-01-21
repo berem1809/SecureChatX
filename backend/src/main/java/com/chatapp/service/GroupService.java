@@ -94,8 +94,20 @@ public interface GroupService {
     /**
      * Allows a member to leave a group.
      * 
+     * BUSINESS RULES:
+     * ---------------
+     * 1. Regular members can always leave
+     * 2. Admin can only leave if:
+     *    a) There are no other members (admin deletes group and exits)
+     *    b) Another user has been promoted to admin first
+     * 3. When admin is the only member left:
+     *    - Group is automatically deleted
+     *    - All group data is removed (cascade delete)
+     *    - No further access is possible
+     * 
      * @param groupId The group ID
      * @param userId The ID of the user leaving
+     * @throws RuntimeException if admin tries to leave with other members still active
      */
     void leaveGroup(Long groupId, Long userId);
     
@@ -254,21 +266,29 @@ class GroupServiceImpl implements GroupService {
         GroupMember member = groupMemberRepository.findByGroupIdAndUserId(groupId, userId)
             .orElseThrow(() -> new GroupAccessDeniedException(groupId, userId));
         
-        // Cannot leave if the last admin
-        if (member.isAdmin() && groupMemberRepository.countAdminsByGroupId(groupId) <= 1) {
+        // Check if member is admin
+        if (member.isAdmin()) {
+            long adminCount = groupMemberRepository.countAdminsByGroupId(groupId);
             long memberCount = groupMemberRepository.countByGroupId(groupId);
-            if (memberCount > 1) {
-                throw new RuntimeException("Cannot leave group. Please promote another member to admin first.");
+            
+            // Admin cannot leave if there are other members and no other admins
+            if (adminCount <= 1 && memberCount > 1) {
+                throw new RuntimeException(
+                    "Admin cannot leave group while other members are active. " +
+                    "Please promote another member to admin first, or remove all other members."
+                );
             }
-            // If last member (and admin), delete the group
-            groupRepository.deleteById(groupId);
-            logger.info("Group {} deleted (last member left)", groupId);
-            return;
+            
+            // If admin is the last member, delete the group
+            if (memberCount == 1) {
+                groupRepository.deleteById(groupId);
+                logger.info("Group {} deleted (admin left and was the last member)", groupId);
+                return;
+            }
         }
         
-        // Remove member
+        // Remove member from group
         groupMemberRepository.delete(member);
-        
         logger.info("User {} left group {}", userId, groupId);
     }
 
