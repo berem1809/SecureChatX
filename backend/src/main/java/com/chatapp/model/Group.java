@@ -73,9 +73,10 @@ public class Group {
     private String name;
 
     /**
-     * Optional description of the group purpose.
+     * Description of the group (mandatory).
+     * Helps members understand the purpose of the group.
      */
-    @Column(length = 500)
+    @Column(nullable = false, length = 500)
     private String description;
 
     // ========================================================================

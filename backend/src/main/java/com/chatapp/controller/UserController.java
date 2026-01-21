@@ -128,6 +128,23 @@ public class UserController {
     }
 
     /**
+     * Gets all available users (excluding current user).
+     * 
+     * GET /api/users/all
+     * 
+     * @param authentication The authentication object
+     * @return List of all available users
+     */
+    @GetMapping("/all")
+    public ResponseEntity<List<UserSearchResponse>> getAllUsers(Authentication authentication) {
+        Long currentUserId = getUserIdFromAuth(authentication);
+        logger.info("User {} requesting all available users", currentUserId);
+        
+        List<UserSearchResponse> results = userSearchService.getAllUsers(currentUserId);
+        return ResponseEntity.ok(results);
+    }
+
+    /**
      * Extracts the user ID from the authentication object.
      * The JWT filter sets the user email as the principal name.
      */

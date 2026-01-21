@@ -38,8 +38,14 @@ const Navbar: React.FC = () => {
             <Button component={Link} to="/chat" sx={{ color: 'white' }}>
               Chat
             </Button>
+            <Button component={Link} to="/users" sx={{ color: 'white' }}>
+              Users
+            </Button>
             <Button component={Link} to="/requests" sx={{ color: 'white' }}>
               Requests
+            </Button>
+            <Button component={Link} to="/groups" sx={{ color: 'white' }}>
+              Groups
             </Button>
             <Typography variant="body2" sx={{ mx: 2, color: 'rgba(255,255,255,0.7)' }}>
               {user?.displayName}
