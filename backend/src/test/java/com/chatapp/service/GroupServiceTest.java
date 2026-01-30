@@ -8,6 +8,7 @@ import com.chatapp.exception.GroupNotFoundException;
 import com.chatapp.model.*;
 import com.chatapp.repository.GroupMemberRepository;
 import com.chatapp.repository.GroupRepository;
+import com.chatapp.repository.ConversationRepository;
 import com.chatapp.repository.UserRepository;
 import com.chatapp.util.GroupPermissionValidator;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +46,9 @@ class GroupServiceTest {
     @Mock
     private GroupPermissionValidator permissionValidator;
 
+    @Mock
+    private ConversationRepository conversationRepository;
+
     private GroupService groupService;
 
     private User creator;
@@ -59,7 +63,8 @@ class GroupServiceTest {
             groupRepository,
             groupMemberRepository,
             userRepository,
-            permissionValidator
+            permissionValidator,
+            conversationRepository
         );
 
         // Setup test users

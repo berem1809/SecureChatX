@@ -52,6 +52,17 @@ public interface GroupService {
      * @return List of groups
      */
     List<GroupResponse> getUserGroups(Long userId);
+
+    /**
+     * Gets groups created by the user's friends (i.e., users with whom
+     * the current user has an accepted conversation) where the current
+     * user is not already a member. Used for the "Discover" tab to allow
+     * users to request joining friend-created groups.
+     *
+     * @param userId The user's ID
+     * @return List of friend-created groups available to discover
+     */
+    List<GroupResponse> getDiscoverableFriendGroups(Long userId);
     
     /**
      * Gets a specific group by ID.
@@ -121,6 +132,20 @@ public interface GroupService {
      * @return The updated group
      */
     GroupResponse updateGroup(Long groupId, Long adminUserId, String name, String description);
+    
+    /**
+     * Allows a user to join a group if they have a conversation with the group creator.
+     * This enables "friends" (users with an established conversation) to join
+     * friend-created groups directly without needing an invitation.
+     * 
+     * @param groupId The group ID to join
+     * @param userId The ID of the user joining
+     * @return The group response after joining
+     * @throws GroupNotFoundException if group doesn't exist
+     * @throws UserAlreadyGroupMemberException if user is already a member
+     * @throws GroupAccessDeniedException if user doesn't have a conversation with group creator
+     */
+    GroupResponse joinGroupAsFriend(Long groupId, Long userId);
 }
 
 /**
@@ -135,15 +160,18 @@ class GroupServiceImpl implements GroupService {
     private final GroupMemberRepository groupMemberRepository;
     private final UserRepository userRepository;
     private final GroupPermissionValidator permissionValidator;
+    private final com.chatapp.repository.ConversationRepository conversationRepository;
 
     public GroupServiceImpl(GroupRepository groupRepository,
                             GroupMemberRepository groupMemberRepository,
                             UserRepository userRepository,
-                            GroupPermissionValidator permissionValidator) {
+                            GroupPermissionValidator permissionValidator,
+                            com.chatapp.repository.ConversationRepository conversationRepository) {
         this.groupRepository = groupRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.userRepository = userRepository;
         this.permissionValidator = permissionValidator;
+        this.conversationRepository = conversationRepository;
     }
 
     @Override
@@ -180,6 +208,27 @@ class GroupServiceImpl implements GroupService {
         logger.debug("Getting groups for user {}", userId);
         
         return groupRepository.findGroupsByMemberId(userId).stream()
+            .map(group -> GroupResponse.fromEntityWithRole(group, userId))
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<GroupResponse> getDiscoverableFriendGroups(Long userId) {
+        logger.debug("Getting discoverable friend-created groups for user {}", userId);
+
+        // Get all conversations for the user (friends)
+        var conversations = conversationRepository.findByUserId(userId);
+
+        // Derive friend IDs from conversations
+        var friendIds = conversations.stream()
+            .map(c -> c.getUser1().getId().equals(userId) ? c.getUser2().getId() : c.getUser1().getId())
+            .distinct()
+            .toList();
+
+        // Aggregate groups created by each friend, excluding ones the user already joined
+        return friendIds.stream()
+            .flatMap(friendId -> groupRepository.findByCreatedById(friendId).stream())
+            .filter(group -> !groupMemberRepository.existsByGroupIdAndUserId(group.getId(), userId))
             .map(GroupResponse::fromEntity)
             .collect(Collectors.toList());
     }
@@ -312,5 +361,40 @@ class GroupServiceImpl implements GroupService {
         
         logger.info("Group {} updated", groupId);
         return GroupResponse.fromEntity(savedGroup);
+    }
+    
+    @Override
+    @Transactional
+    public GroupResponse joinGroupAsFriend(Long groupId, Long userId) {
+        logger.info("User {} attempting to join group {} as friend", userId, groupId);
+        
+        // Get the group
+        Group group = groupRepository.findById(groupId)
+            .orElseThrow(() -> new GroupNotFoundException(groupId));
+        
+        // Check if user is already a member
+        if (groupMemberRepository.existsByGroupIdAndUserId(groupId, userId)) {
+            throw new UserAlreadyGroupMemberException(userId, groupId);
+        }
+        
+        // Get the user
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new UserNotFoundException(userId));
+        
+        // Verify user has a conversation with the group creator (they are "friends")
+        Long creatorId = group.getCreatedBy().getId();
+        boolean isFriend = conversationRepository.existsBetweenUsers(userId, creatorId);
+        
+        if (!isFriend) {
+            throw new GroupAccessDeniedException(groupId, userId, 
+                "You must have an established conversation with the group creator to join this group");
+        }
+        
+        // Add user as a regular member
+        GroupMember member = new GroupMember(group, user, GroupRole.MEMBER);
+        groupMemberRepository.save(member);
+        
+        logger.info("User {} successfully joined group {} as friend", userId, groupId);
+        return GroupResponse.fromEntityWithMembers(group);
     }
 }

@@ -2,6 +2,7 @@ package com.chatapp.controller;
 
 import com.chatapp.dto.MessageCreateRequest;
 import com.chatapp.dto.MessageResponse;
+import com.chatapp.dto.ErrorResponse;
 import com.chatapp.repository.UserRepository;
 import com.chatapp.service.MessageService;
 import jakarta.validation.Valid;
@@ -55,16 +56,30 @@ public class MessageController {
      * Sends a message to a conversation.
      */
     @PostMapping("/{conversationId}/messages")
-    public ResponseEntity<MessageResponse> sendMessage(
+    public ResponseEntity<?> sendMessage(
             @PathVariable Long conversationId,
             @Valid @RequestBody MessageCreateRequest request,
             Authentication authentication) {
         
         Long userId = getUserIdFromAuth(authentication);
         logger.info("User {} sending message to conversation {}", userId, conversationId);
+        logger.debug("Message request: encrypted={}, hasNonce={}", 
+            request.getEncryptedContent() != null,
+            request.getEncryptionNonce() != null);
         
-        MessageResponse message = messageService.sendMessage(conversationId, userId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(message);
+        try {
+            MessageResponse message = messageService.sendMessage(conversationId, userId, request);
+            logger.info("✅ Message sent successfully by user {} in conversation {}", userId, conversationId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(message);
+        } catch (IllegalArgumentException e) {
+            logger.warn("❌ Invalid argument when sending message: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                .body(new ErrorResponse(400, "Invalid message request", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("❌ Error sending message in conversation {}: {}", conversationId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse(500, "Failed to send message", e.getMessage()));
+        }
     }
 
     private Long getUserIdFromAuth(Authentication authentication) {
