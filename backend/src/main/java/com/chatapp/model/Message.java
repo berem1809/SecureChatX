@@ -3,9 +3,6 @@ package com.chatapp.model;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-/**
- * Message entity representing a chat message in a conversation.
- */
 @Entity
 @Table(name = "messages", indexes = {
     @Index(name = "idx_message_conversation", columnList = "conversation_id"),
@@ -26,8 +23,38 @@ public class Message {
     @JoinColumn(name = "sender_id", nullable = false)
     private User sender;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    /**
+     * Plaintext content (only for unencrypted messages)
+     * NULL for end-to-end encrypted messages
+     */
+    @Column(nullable = true, columnDefinition = "TEXT")  // ✅ CHANGED: nullable = true
     private String content;
+
+    /**
+     * Encrypted message content (XChaCha20-Poly1305 ciphertext)
+     * Stored in Base64 format
+     */
+    @Column(name = "encrypted_content", columnDefinition = "TEXT")
+    private String encryptedContent;
+
+    /**
+     * Nonce used for encryption (Base64 encoded)
+     */
+    @Column(name = "encryption_nonce")
+    private String encryptionNonce;
+
+    /**
+     * Sender's public key at time of message (Base64 encoded)
+     * Used for decryption verification
+     */
+    @Column(name = "sender_public_key", columnDefinition = "TEXT")
+    private String senderPublicKey;
+
+    /**
+     * Flag indicating if message content is encrypted
+     */
+    @Column(name = "is_encrypted")
+    private Boolean isEncrypted = false;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -72,4 +99,16 @@ public class Message {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getEncryptedContent() { return encryptedContent; }
+    public void setEncryptedContent(String encryptedContent) { this.encryptedContent = encryptedContent; }
+
+    public String getEncryptionNonce() { return encryptionNonce; }
+    public void setEncryptionNonce(String encryptionNonce) { this.encryptionNonce = encryptionNonce; }
+
+    public String getSenderPublicKey() { return senderPublicKey; }
+    public void setSenderPublicKey(String senderPublicKey) { this.senderPublicKey = senderPublicKey; }
+
+    public Boolean getIsEncrypted() { return isEncrypted; }
+    public void setIsEncrypted(Boolean isEncrypted) { this.isEncrypted = isEncrypted; }
 }

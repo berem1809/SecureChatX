@@ -24,6 +24,7 @@ public class GroupResponse {
     private LocalDateTime lastMessageAt;
     private int memberCount;
     private List<GroupMemberResponse> members;
+    private String role; // User's role in the group: ADMIN or MEMBER
 
     // ========================================================================
     // CONSTRUCTORS
@@ -69,6 +70,23 @@ public class GroupResponse {
         return response;
     }
 
+    /**
+     * Creates a GroupResponse with the user's role in the group.
+     * 
+     * @param group The group entity
+     * @param userId The current user's ID
+     * @return GroupResponse with role included
+     */
+    public static GroupResponse fromEntityWithRole(Group group, Long userId) {
+        GroupResponse response = fromEntity(group);
+        // Find user's role in the group
+        group.getMembers().stream()
+            .filter(m -> m.getUser().getId().equals(userId))
+            .findFirst()
+            .ifPresent(m -> response.setRole(m.getRole().name()));
+        return response;
+    }
+
     // ========================================================================
     // GETTERS AND SETTERS
     // ========================================================================
@@ -96,4 +114,7 @@ public class GroupResponse {
 
     public List<GroupMemberResponse> getMembers() { return members; }
     public void setMembers(List<GroupMemberResponse> members) { this.members = members; }
+
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
 }

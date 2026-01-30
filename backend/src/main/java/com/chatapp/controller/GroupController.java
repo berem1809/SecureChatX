@@ -23,6 +23,7 @@ import java.util.List;
  * ---------------
  * POST /api/groups                           - Create a new group
  * GET  /api/groups                           - Get all user's groups
+ * GET  /api/groups/discover                  - Get friend-created groups user can join
  * GET  /api/groups/{id}                      - Get specific group
  * PUT  /api/groups/{id}                      - Update group info (admin only)
  * POST /api/groups/{id}/leave                - Leave a group
@@ -108,6 +109,24 @@ public class GroupController {
     }
 
     /**
+     * Gets groups created by friends (users with accepted conversations)
+     * that the current user is not already a member of.
+     * 
+     * GET /api/groups/discover
+     * 
+     * @param authentication The authentication object
+     * @return List of discoverable groups
+     */
+    @GetMapping("/discover")
+    public ResponseEntity<List<GroupResponse>> getDiscoverableGroups(Authentication authentication) {
+        Long userId = getUserIdFromAuth(authentication);
+        logger.debug("Getting discoverable groups for user {}", userId);
+
+        List<GroupResponse> groups = groupService.getDiscoverableFriendGroups(userId);
+        return ResponseEntity.ok(groups);
+    }
+
+    /**
      * Gets a specific group by ID.
      * 
      * GET /api/groups/{groupId}
@@ -173,6 +192,28 @@ public class GroupController {
         
         groupService.leaveGroup(groupId, userId);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Allows a user to join a group if they have a conversation with the group creator.
+     * This enables "friends" to join friend-created groups directly from the Discover tab.
+     * 
+     * POST /api/groups/{groupId}/join
+     * 
+     * @param groupId The group ID
+     * @param authentication The authentication object
+     * @return The joined group
+     */
+    @PostMapping("/{groupId}/join")
+    public ResponseEntity<GroupResponse> joinGroup(
+            @PathVariable Long groupId,
+            Authentication authentication) {
+        
+        Long userId = getUserIdFromAuth(authentication);
+        logger.info("User {} attempting to join group {}", userId, groupId);
+        
+        GroupResponse response = groupService.joinGroupAsFriend(groupId, userId);
+        return ResponseEntity.ok(response);
     }
 
     // ========================================================================

@@ -13,15 +13,19 @@ import {
   IconButton,
   Typography,
   Divider,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import PersonIcon from '@mui/icons-material/Person';
+import GroupIcon from '@mui/icons-material/Group';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
   fetchConversations,
   fetchMessages,
   sendMessage,
   selectConversation,
+  setChatType,
 } from '../store/slices/chatSlice';
 
 const ChatPage: React.FC = () => {
@@ -29,7 +33,7 @@ const ChatPage: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const dispatch = useAppDispatch();
-  const { conversations, selectedConversation, messages, isLoading } = useAppSelector(
+  const { conversations, selectedConversation, messages, isLoading, chatType } = useAppSelector(
     (state) => state.chat
   );
   const currentUser = useAppSelector((state) => state.auth.user);
@@ -56,6 +60,15 @@ const ChatPage: React.FC = () => {
     setNewMessage('');
   };
 
+  // Filter conversations based on selected chat type
+  const filteredConversations = conversations.filter((conv) => {
+    if (chatType === 'direct') {
+      return !conv.isGroup;
+    } else {
+      return conv.isGroup;
+    }
+  });
+
   // Helpers for time/date formatting and separators
   const formatTime = (timestamp: string) => {
     const d = new Date(timestamp);
@@ -76,22 +89,34 @@ const ChatPage: React.FC = () => {
     <Container maxWidth="lg" sx={{ mt: 2 }}>
       <Paper sx={{ height: 'calc(100vh - 120px)', display: 'flex' }}>
         {/* Conversation List */}
-        <Box sx={{ width: { xs: '100%', sm: 300 }, borderRight: 1, borderColor: 'divider' }}>
-          <Typography variant="h6" sx={{ p: 2 }}>
-            Conversations
-          </Typography>
-          <Divider />
-          <List sx={{ overflow: 'auto', height: 'calc(100% - 60px)' }}>
+        <Box sx={{ width: { xs: '100%', sm: 300 }, borderRight: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column' }}>
+          {/* Chat Type Tabs */}
+          <Tabs
+            value={chatType === 'direct' ? 0 : 1}
+            onChange={(_, newValue) => {
+              dispatch(setChatType(newValue === 0 ? 'direct' : 'group'));
+            }}
+            variant="fullWidth"
+            sx={{ borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab label="Direct Chat" icon={<PersonIcon />} iconPosition="start" />
+            <Tab label="Group Chat" icon={<GroupIcon />} iconPosition="start" />
+          </Tabs>
+
+          <List sx={{ overflow: 'auto', flex: 1 }}>
             {isLoading ? (
               <ListItem>
                 <ListItemText primary="Loading..." />
               </ListItem>
-            ) : conversations.length === 0 ? (
+            ) : filteredConversations.length === 0 ? (
               <ListItem>
-                <ListItemText primary="No conversations yet" secondary="Send a chat request to start" />
+                <ListItemText
+                  primary={`No ${chatType} conversations`}
+                  secondary={chatType === 'direct' ? 'Send a direct chat request to start' : 'Create or join a group to start'}
+                />
               </ListItem>
             ) : (
-              conversations.map((conv) => {
+              filteredConversations.map((conv) => {
                 // Get the other participant's info
                 const otherUser = conv.otherParticipant || 
                   (conv.participants && conv.participants.length > 0 
@@ -107,8 +132,8 @@ const ChatPage: React.FC = () => {
                     onClick={() => dispatch(selectConversation(conv))}
                   >
                     <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: 'primary.main' }}>
-                        <PersonIcon />
+                      <Avatar sx={{ bgcolor: conv.isGroup ? 'success.main' : 'primary.main' }}>
+                        {conv.isGroup ? <GroupIcon /> : <PersonIcon />}
                       </Avatar>
                     </ListItemAvatar>
                     <ListItemText

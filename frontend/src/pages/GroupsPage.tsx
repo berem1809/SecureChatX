@@ -106,7 +106,6 @@ const GroupsPage: React.FC = () => {
   const [selectedGroupForRequest, setSelectedGroupForRequest] = useState<Group | null>(null);
   const [requestMessage, setRequestMessage] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
-  const [groupCreatorFriends, setGroupCreatorFriends] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
   const currentUserId = useAppSelector((state) => state.auth.user?.id);
 
@@ -143,47 +142,19 @@ const GroupsPage: React.FC = () => {
   const fetchAllGroups = async () => {
     try {
       setIsLoading(true);
-      // For now, we'll get user's groups - in a real app, you'd have a /api/groups/all endpoint
-      // or search functionality. Since we only have user's groups, we'll show them here too
-      const response = await api.get('/api/groups');
+      // Fetch friend-created groups the user can join
+      const response = await api.get('/api/groups/discover');
       const userGroupIds = new Set(response.data.map((g: Group) => g.id));
       
       // Filter to show only groups where user is not a member (for demonstration)
       // In production, you'd fetch from /api/groups/public or similar
       setAllGroups(response.data);
       
-      // Check which group creators are friends
-      await checkGroupCreatorFriendships(response.data);
-      
       setError('');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch groups');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const checkGroupCreatorFriendships = async (groups: Group[]) => {
-    try {
-      const friends = new Set<number>();
-      
-      // Check each group creator for existing conversation
-      await Promise.all(
-        groups.map(async (group) => {
-          try {
-            const response = await api.get(`/api/conversations/exists/${group.createdBy.id}`);
-            if (response.data === true) {
-              friends.add(group.createdBy.id);
-            }
-          } catch (err) {
-            console.debug(`Could not check friendship with user ${group.createdBy.id}`);
-          }
-        })
-      );
-      
-      setGroupCreatorFriends(friends);
-    } catch (err) {
-      console.error('Error checking group creator friendships:', err);
     }
   };
 
@@ -318,15 +289,8 @@ const GroupsPage: React.FC = () => {
    */
   const handleOpenJoinRequest = (group: Group) => {
     setSelectedGroupForRequest(group);
-    
-    // If the group creator is a friend, show confirmation dialog
-    if (groupCreatorFriends.has(group.createdBy.id)) {
-      setJoinConfirmDialogOpen(true);
-    } else {
-      // Otherwise, show the regular request message dialog
-      setRequestMessage(`Hi! I would like to join "${group.name}". ${group.description}`);
-      setJoinRequestDialogOpen(true);
-    }
+    // All groups in Discover tab are friend-created, show confirmation dialog
+    setJoinConfirmDialogOpen(true);
   };
 
   /**
@@ -341,7 +305,7 @@ const GroupsPage: React.FC = () => {
   };
 
   /**
-   * Send join request to group admin
+   * Send join request to group admin, or join directly if already friends
    */
   const handleSendJoinRequest = async () => {
     if (!selectedGroupForRequest || !requestMessage.trim()) return;
@@ -349,21 +313,60 @@ const GroupsPage: React.FC = () => {
     try {
       setIsLoading(true);
       
-      // Send request to group creator/admin
-      // This creates a chat request to the group admin with context about the group
+      const adminId = selectedGroupForRequest.createdBy.id;
+      const adminName = selectedGroupForRequest.createdBy.displayName;
+      const groupName = selectedGroupForRequest.name;
+      
+      // First, check if a conversation already exists with the admin (they are friends)
+      const existsResponse = await api.get(`/api/conversations/exists/${adminId}`);
+      if (existsResponse.data === true) {
+        // User is friends with the admin - join the group directly
+        await api.post(`/api/groups/${selectedGroupForRequest.id}/join`);
+        
+        setSuccessMessage(`You have successfully joined "${groupName}"!`);
+        setJoinRequestDialogOpen(false);
+        setRequestMessage('');
+        setSelectedGroupForRequest(null);
+        
+        // Refresh groups to move the group from Discover to My Groups
+        await fetchGroups();
+        await fetchDiscoverableGroups();
+        
+        setTimeout(() => setSuccessMessage(''), 3000);
+        return;
+      }
+      
+      // Not friends yet - send chat request to group creator/admin
       await api.post('/api/chat-requests', {
         receiverEmail: selectedGroupForRequest.createdBy.email,
         message: requestMessage,
       });
       
-      setSuccessMessage(`Join request sent to ${selectedGroupForRequest.createdBy.displayName}`);
+      setSuccessMessage(`Join request sent to ${adminName}. Once they accept, you can ask to join the group.`);
       setJoinRequestDialogOpen(false);
       setRequestMessage('');
       setSelectedGroupForRequest(null);
       
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to send join request');
+      const errorMessage = err.response?.data?.message || '';
+      const statusCode = err.response?.status;
+      
+      // Handle 409 Conflict - chat request already exists or already a member
+      if (statusCode === 409) {
+        if (errorMessage.includes('already a member')) {
+          setError(`You are already a member of this group.`);
+          // Refresh to update UI
+          await fetchGroups();
+          await fetchDiscoverableGroups();
+        } else if (errorMessage.includes('chat request already exists')) {
+          setError(`You already have a pending chat request with ${selectedGroupForRequest.createdBy.displayName}. Please wait for them to respond.`);
+        } else {
+          setError(errorMessage || 'A request already exists. Please check your pending requests.');
+        }
+      } else {
+        setError(errorMessage || 'Failed to send join request');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -755,3 +758,9 @@ const GroupsPage: React.FC = () => {
 };
 
 export default GroupsPage;
+
+
+function fetchDiscoverableGroups() {
+  throw new Error('Function not implemented.');
+}
+

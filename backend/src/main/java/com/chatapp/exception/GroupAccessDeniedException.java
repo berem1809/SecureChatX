@@ -26,6 +26,10 @@ public class GroupAccessDeniedException extends RuntimeException {
         super(String.format("User %d does not have access to group %d", userId, groupId));
     }
 
+    public GroupAccessDeniedException(Long groupId, Long userId, String reason) {
+        super(String.format("User %d cannot access group %d: %s", userId, groupId, reason));
+    }
+
     /**
      * Creates an exception for insufficient role permissions.
      * 

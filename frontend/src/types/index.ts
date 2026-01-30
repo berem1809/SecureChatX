@@ -33,6 +33,15 @@ export interface Message {
   senderId: number;
   senderName: string;
   timestamp: string;
+  // Encryption fields
+  isEncrypted?: boolean;
+  ciphertext?: string;
+  nonce?: string;
+  senderPublicKey?: string;
+  encryptedContent?: string;
+  encryptionNonce?: string;
+  recipientPublicKey?: string;
+  recipientId?: number;
 }
 
 // Conversation types - matches backend ConversationResponse
@@ -81,9 +90,15 @@ export interface Group {
   id: number;
   name: string;
   description?: string;
+  createdBy: {
+    id: number;
+    displayName: string;
+    email: string;
+  };
   createdAt: string;
   memberCount: number;
   members?: GroupMember[];
+  role?: 'ADMIN' | 'MEMBER';
 }
 
 export interface GroupInvitation {
