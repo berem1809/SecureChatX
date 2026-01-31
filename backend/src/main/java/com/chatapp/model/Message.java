@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "messages", indexes = {
     @Index(name = "idx_message_conversation", columnList = "conversation_id"),
+    @Index(name = "idx_message_group", columnList = "group_id"),
     @Index(name = "idx_message_sender", columnList = "sender_id"),
     @Index(name = "idx_message_created", columnList = "created_at")
 })
@@ -15,9 +16,21 @@ public class Message {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * For direct (1-to-1) conversations
+     * NULL for group messages
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "conversation_id", nullable = false)
+    @JoinColumn(name = "conversation_id", nullable = true)
     private Conversation conversation;
+
+    /**
+     * For group conversations
+     * NULL for direct messages
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id", nullable = true)
+    private Group group;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "sender_id", nullable = false)
@@ -87,6 +100,9 @@ public class Message {
 
     public Conversation getConversation() { return conversation; }
     public void setConversation(Conversation conversation) { this.conversation = conversation; }
+
+    public Group getGroup() { return group; }
+    public void setGroup(Group group) { this.group = group; }
 
     public User getSender() { return sender; }
     public void setSender(User sender) { this.sender = sender; }

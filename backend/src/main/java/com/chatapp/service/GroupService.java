@@ -1,6 +1,7 @@
 package com.chatapp.service;
 
 import com.chatapp.dto.GroupCreateRequest;
+import com.chatapp.dto.GroupKeyResponse;
 import com.chatapp.dto.GroupMemberResponse;
 import com.chatapp.dto.GroupResponse;
 import com.chatapp.exception.*;
@@ -75,6 +76,16 @@ public interface GroupService {
     GroupResponse getGroup(Long groupId, Long userId);
     
     /**
+     * Gets the symmetric key for a group.
+     * Validates that the requesting user is a member.
+     *
+     * @param groupId The group ID
+     * @param userId The ID of the user requesting
+     * @return The group's symmetric key info (raw and/or wrapped)
+     */
+    com.chatapp.dto.GroupKeyResponse getGroupKey(Long groupId, Long userId);
+    
+    /**
      * Gets all members of a group.
      * 
      * @param groupId The group ID
@@ -132,6 +143,18 @@ public interface GroupService {
      * @return The updated group
      */
     GroupResponse updateGroup(Long groupId, Long adminUserId, String name, String description);
+
+    /**
+     * Updates a member's wrapped group key.
+     * Use this when a new member joins or when rotating keys.
+     * 
+     * @param groupId The group ID
+     * @param memberUserId The ID of the member whose key is being updated
+     * @param encryptedKey The wrapped key
+     * @param nonce The nonce used for wrapping
+     * @param senderPublicKey The public key used by the wrapper
+     */
+    void updateMemberKey(Long groupId, Long memberUserId, String encryptedKey, String nonce, String senderPublicKey);
     
     /**
      * Allows a user to join a group if they have a conversation with the group creator.
@@ -244,6 +267,38 @@ class GroupServiceImpl implements GroupService {
             .orElseThrow(() -> new GroupNotFoundException(groupId));
         
         return GroupResponse.fromEntityWithMembers(group);
+    }
+
+    @Override
+    @Transactional
+    public GroupKeyResponse getGroupKey(Long groupId, Long userId) {
+        logger.debug("Getting group key for group {} and user {}", groupId, userId);
+        
+        // Validate membership
+        permissionValidator.validateMember(groupId, userId);
+        
+        Group group = groupRepository.findById(groupId)
+            .orElseThrow(() -> new GroupNotFoundException(groupId));
+            
+        GroupMember member = groupMemberRepository.findByGroupIdAndUserId(groupId, userId)
+            .orElseThrow(() -> new GroupAccessDeniedException(groupId, userId));
+        
+        // Generate raw key for existing groups that don't have one yet
+        if (group.getGroupKey() == null || group.getGroupKey().isEmpty()) {
+            logger.info("Generating new group key for group {}", groupId);
+            String newKey = com.chatapp.util.EncryptionUtil.generateSecureKey(32);
+            group.setGroupKey(newKey);
+            groupRepository.save(group);
+        }
+        
+        // Return BOTH raw key (for fallback) and wrapped key (for perfect E2EE)
+        GroupKeyResponse response = new GroupKeyResponse();
+        response.setKey(group.getGroupKey());
+        response.setEncryptedKey(member.getEncryptedGroupKey());
+        response.setNonce(member.getKeyNonce());
+        response.setSenderPublicKey(member.getSenderPublicKey());
+        
+        return response;
     }
 
     @Override
@@ -361,6 +416,22 @@ class GroupServiceImpl implements GroupService {
         
         logger.info("Group {} updated", groupId);
         return GroupResponse.fromEntity(savedGroup);
+    }
+
+    @Override
+    @Transactional
+    public void updateMemberKey(Long groupId, Long memberUserId, String encryptedKey, String nonce, String senderPublicKey) {
+        logger.info("Updating member key for group {} and member {}", groupId, memberUserId);
+        
+        GroupMember member = groupMemberRepository.findByGroupIdAndUserId(groupId, memberUserId)
+            .orElseThrow(() -> new RuntimeException("Member not found"));
+            
+        member.setEncryptedGroupKey(encryptedKey);
+        member.setKeyNonce(nonce);
+        member.setSenderPublicKey(senderPublicKey);
+        
+        groupMemberRepository.save(member);
+        logger.info("Member key updated successfully");
     }
     
     @Override

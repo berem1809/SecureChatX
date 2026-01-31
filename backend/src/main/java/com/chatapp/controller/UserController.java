@@ -1,6 +1,7 @@
 package com.chatapp.controller;
 
 import com.chatapp.dto.UserSearchResponse;
+import com.chatapp.exception.UserNotFoundException;
 import com.chatapp.model.User;
 import com.chatapp.repository.UserRepository;
 import com.chatapp.service.UserSearchService;
@@ -151,7 +152,7 @@ public class UserController {
     private Long getUserIdFromAuth(Authentication authentication) {
         String email = authentication.getName();
         return userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"))
+            .orElseThrow(() -> UserNotFoundException.byEmail(email))
             .getId();
     }
 }

@@ -170,17 +170,31 @@ public class MessageEncryptionService {
      * @param action "SEND" or "RECEIVE"
      */
     public void auditMessageOperation(Message message, Long userId, String action) {
-        log.info("🔐 [AUDIT] {} encrypted message {} by user {} in conversation {}",
-                action,
-                message.getId(),
-                userId,
-                message.getConversation().getId());
+        // Get conversation or group ID based on message type
+        Long contextId = null;
+        String contextType = "unknown";
+
+        if (message.getConversation() != null) {
+            contextId = message.getConversation().getId();
+            contextType = "conversation";
+        } else if (message.getGroup() != null) {
+            contextId = message.getGroup().getId();
+            contextType = "group";
+        }
         
-        log.debug("  - Sender: {}",
-                message.getSender().getId());
+        log.info("🔐 [AUDIT] {} encrypted message {} by user {} in {} {}",
+                action,
+                message.getId() != null ? message.getId() : "NEW",
+                userId,
+                contextType,
+                contextId);
+        
+        if (message.getSender() != null) {
+            log.debug("  - Sender: {}", message.getSender().getId());
+        }
         log.debug("  - Encrypted size: {} bytes",
-                message.getEncryptedContent().length());
-        log.debug("  - Algorithm: XSalsa20-Poly1305");
+                message.getEncryptedContent() != null ? message.getEncryptedContent().length() : 0);
+        log.debug("  - Algorithm: XSalsa20-Poly1305 / NaCl SecretBox");
         log.debug("  - Timestamp: {}",
                 message.getCreatedAt());
         
@@ -202,6 +216,19 @@ public class MessageEncryptionService {
         response.setSenderUsername(message.getSender().getEmail());
         response.setSenderEmail(message.getSender().getEmail());
         response.setSenderDisplayName(message.getSender().getDisplayName());
+        
+        // Set conversation/group identification fields
+        if (message.getGroup() != null) {
+            // GROUP MESSAGE
+            response.setIsGroup(true);
+            response.setGroupId(message.getGroup().getId());
+            response.setConversationId(message.getGroup().getId()); // For backward compatibility
+        } else if (message.getConversation() != null) {
+            // DIRECT MESSAGE
+            response.setIsGroup(false);
+            response.setGroupId(null);
+            response.setConversationId(message.getConversation().getId());
+        }
         
         // Return ENCRYPTED content (not plaintext)
         response.setEncryptedContent(message.getEncryptedContent());

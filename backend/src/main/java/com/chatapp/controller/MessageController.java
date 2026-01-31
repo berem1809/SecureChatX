@@ -3,6 +3,7 @@ package com.chatapp.controller;
 import com.chatapp.dto.MessageCreateRequest;
 import com.chatapp.dto.MessageResponse;
 import com.chatapp.dto.ErrorResponse;
+import com.chatapp.exception.UserNotFoundException;
 import com.chatapp.repository.UserRepository;
 import com.chatapp.service.MessageService;
 import jakarta.validation.Valid;
@@ -39,16 +40,18 @@ public class MessageController {
 
     /**
      * Gets all messages in a conversation.
+     * @param isGroup Optional flag to explicitly indicate this is a group (helps when IDs might collide)
      */
     @GetMapping("/{conversationId}/messages")
     public ResponseEntity<List<MessageResponse>> getMessages(
             @PathVariable Long conversationId,
+            @RequestParam(required = false) Boolean isGroup,
             Authentication authentication) {
         
         Long userId = getUserIdFromAuth(authentication);
-        logger.debug("User {} fetching messages for conversation {}", userId, conversationId);
+        logger.debug("User {} fetching messages for conversation {} (isGroup={})", userId, conversationId, isGroup);
         
-        List<MessageResponse> messages = messageService.getMessages(conversationId, userId);
+        List<MessageResponse> messages = messageService.getMessages(conversationId, userId, isGroup);
         return ResponseEntity.ok(messages);
     }
 
@@ -85,7 +88,7 @@ public class MessageController {
     private Long getUserIdFromAuth(Authentication authentication) {
         String email = authentication.getName();
         return userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"))
+            .orElseThrow(() -> UserNotFoundException.byEmail(email))
             .getId();
     }
 }

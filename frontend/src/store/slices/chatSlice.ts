@@ -48,10 +48,13 @@ const mapConversation = (data: any): Conversation => {
   if (user1) participants.push(user1);
   if (user2) participants.push(user2);
 
+  const isGroup = data.isGroup || false;
+
   return {
     id: data.id,
     name: data.name,
-    isGroup: data.isGroup || false,
+    isGroup,
+    groupId: isGroup ? data.id : undefined, // For groups, id IS the groupId
     participants: data.participants || participants,
     lastMessage: data.lastMessage,
     user1,
@@ -59,6 +62,7 @@ const mapConversation = (data: any): Conversation => {
     otherParticipant,
     createdAt: data.createdAt,
     lastMessageAt: data.lastMessageAt,
+    unreadCount: data.unreadCount || 0,
   };
 };
 
@@ -86,23 +90,80 @@ export const fetchConversations = createAsyncThunk(
 
 export const fetchMessages = createAsyncThunk(
   'chat/fetchMessages',
-  async (conversationId: number, { rejectWithValue, getState }) => {
+  async ({ conversationId, isGroup }: { conversationId: number; isGroup: boolean }, { rejectWithValue, getState }) => {
     try {
-      const response = await api.get(`/api/conversations/${conversationId}/messages`);
+      // Pass isGroup to the backend to avoid ID collision issues
+      const response = await api.get(`/api/conversations/${conversationId}/messages?isGroup=${isGroup}`);
       const state: any = getState();
       const user = state.auth.user;
       const conversation = state.chat.selectedConversation;
       
-      console.log(`📥 Fetched ${response.data.length} messages for conversation ${conversationId}`);
+      console.log(`📥 Fetched ${response.data.length} messages for conversation ${conversationId} (isGroup=${isGroup})`);
+      console.log(`📌 Conversation isGroup: ${conversation?.isGroup}`);
       
       // Decrypt messages if they are encrypted - use Promise.all for async operations
       return Promise.all(response.data.map(async (msg: any) => {
-        // Check if message has encrypted fields (not just isEncrypted flag)
-        const hasEncryptedFields = msg.encryptedContent && msg.encryptionNonce && msg.senderPublicKey;
+        // Check if message has ECDH encrypted fields (direct message encryption)
+        const hasECDHFields = msg.encryptedContent && msg.encryptionNonce && msg.senderPublicKey;
+        // Check if message has group encrypted fields (no senderPublicKey)
+        const hasGroupFields = msg.encryptedContent && msg.encryptionNonce && !msg.senderPublicKey;
         
-        console.log(`Message ${msg.id} - hasEncryptedFields: ${hasEncryptedFields}, isEncrypted: ${msg.isEncrypted}`);
+        // Use the message's isGroup flag from server (more reliable than conversation state)
+        const isGroupMessage = msg.isGroup === true || (conversation?.isGroup && !msg.senderPublicKey);
         
-        if (hasEncryptedFields) {
+        console.log(`Message ${msg.id} - hasECDHFields: ${hasECDHFields}, hasGroupFields: ${hasGroupFields}, isEncrypted: ${msg.isEncrypted}, isGroupMessage: ${isGroupMessage}`);
+        
+        // For GROUP messages (determined by message's isGroup flag)
+        if (isGroupMessage) {
+          console.log(`Message ${msg.id} is a GROUP message`);
+          
+          // If message has senderPublicKey, it was encrypted with ECDH (old method)
+          // These messages cannot be decrypted with the group key
+          if (hasECDHFields) {
+            console.log(`Message ${msg.id} was encrypted with ECDH (legacy) - cannot decrypt with group key`);
+            return mapMessage({
+              ...msg,
+              content: '[Legacy encrypted message - encrypted before group key was implemented]',
+            });
+          }
+          
+          // If message has group encrypted fields, decrypt with group key
+          if (hasGroupFields) {
+            console.log(`Message ${msg.id} - attempting group key decryption`);
+            try {
+              const groupKey = await KeyExchangeService.getGroupKey(conversation.id, user.id);
+              if (!groupKey) {
+                throw new Error('No group key available for decryption.');
+              }
+
+              const decryptedContent = EncryptionService.decryptWithGroupKey(
+                {
+                  ciphertext: msg.encryptedContent,
+                  nonce: msg.encryptionNonce,
+                },
+                groupKey
+              );
+
+              return mapMessage({
+                ...msg,
+                content: decryptedContent,
+              });
+            } catch (error) {
+              console.error(`❌ Failed to decrypt group message ${msg.id}:`, error);
+              return mapMessage({
+                ...msg,
+                content: `[Group decryption failed: ${error instanceof Error ? error.message : String(error)}]`,
+              });
+            }
+          }
+          
+          // No encrypted fields - use content as-is
+          console.log(`Message ${msg.id} has no encrypted fields, using plaintext content`);
+          return mapMessage(msg);
+        }
+        
+        // For DIRECT conversations: Use ECDH-based decryption
+        if (hasECDHFields) {
           try {
             console.log(`🔓 Attempting to decrypt message ${msg.id} from sender ${msg.senderId}`);
             const myPrivateKey = EncryptionService.getPrivateKey(user.id);
@@ -180,6 +241,20 @@ export const fetchMessages = createAsyncThunk(
   }
 );
 
+// Mark conversation as read
+export const markConversationAsRead = createAsyncThunk(
+  'chat/markAsRead',
+  async (conversationId: number, { rejectWithValue }) => {
+    try {
+      await api.post(`/api/conversations/${conversationId}/read`);
+      return conversationId;
+    } catch (error: any) {
+      console.error('Error marking conversation as read:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to mark as read');
+    }
+  }
+);
+
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
   async (
@@ -199,59 +274,96 @@ export const sendMessage = createAsyncThunk(
         return rejectWithValue('No conversation selected');
       }
 
-      // Determine recipient id (other participant)
-      const other = conv.otherParticipant || (conv.participants && conv.participants.find((p: any) => p.id !== user.id));
-      if (!other) {
-        return rejectWithValue('Conversation recipient not found');
-      }
-      const recipientId: number = other.id;
-
       console.log('🔐 Starting encryption process...');
       console.log('Sender ID:', user.id);
-      console.log('Recipient ID:', recipientId);
+      console.log('Conversation isGroup:', conv.isGroup);
       console.log('Message content:', content);
 
-      // Retrieve our private key from local storage (stored during initialization)
-      const myPrivateKey = EncryptionService.getPrivateKey(user.id);
-      if (!myPrivateKey) {
-        return rejectWithValue('❌ Your encryption keys are not initialized. Please refresh the page and try again.');
+      let payload: any;
+      let decryptionKey: any; // Will store the key/secret needed for decryption
+
+      // ========================================
+      // GROUP CHAT ENCRYPTION (Symmetric Key)
+      // ========================================
+      if (conv.isGroup) {
+        console.log('📦 Using GROUP encryption (symmetric key)');
+        
+        // Get the group key
+        const groupKey = await KeyExchangeService.getGroupKey(conv.id, user.id);
+        if (!groupKey) {
+          return rejectWithValue('❌ Could not retrieve group encryption key. Please try again.');
+        }
+        console.log('✅ Group key retrieved');
+
+        // Encrypt message with group key
+        const encryptedMsg = EncryptionService.encryptWithGroupKey(content, groupKey);
+        console.log('✅ Message encrypted with group key');
+
+        // Prepare payload for group message (no senderPublicKey needed)
+        payload = {
+          encryptedContent: encryptedMsg.ciphertext,
+          encryptionNonce: encryptedMsg.nonce,
+          isEncrypted: true,
+          isGroupMessage: true, // Flag to indicate this is a group message
+        };
+
+        decryptionKey = groupKey;
+      } 
+      // ========================================
+      // DIRECT CHAT ENCRYPTION (ECDH)
+      // ========================================
+      else {
+        console.log('📦 Using DIRECT encryption (ECDH)');
+        
+        // Determine recipient id (other participant)
+        const other = conv.otherParticipant || (conv.participants && conv.participants.find((p: any) => p.id !== user.id));
+        if (!other) {
+          return rejectWithValue('Conversation recipient not found');
+        }
+        const recipientId: number = other.id;
+        console.log('Recipient ID:', recipientId);
+
+        // Retrieve our private key from local storage (stored during initialization)
+        const myPrivateKey = EncryptionService.getPrivateKey(user.id);
+        if (!myPrivateKey) {
+          return rejectWithValue('❌ Your encryption keys are not initialized. Please refresh the page and try again.');
+        }
+        console.log('✅ Private key retrieved');
+
+        // Derive our actual public key from the private key
+        const myPublicKey: string = EncryptionService.getPublicKeyFromPrivateKey(myPrivateKey);
+        console.log('✅ My public key derived from private key');
+
+        // Fetch recipient public key from server
+        const recipientKeyResp = await KeyExchangeService.getPublicKey(recipientId);
+        if (!recipientKeyResp) {
+          return rejectWithValue(`❌ Recipient (${other.displayName}) has not initialized encryption yet. They must set up encryption first.`);
+        }
+        const recipientPublicKey: string = recipientKeyResp.publicKey;
+        console.log('✅ Recipient public key retrieved');
+
+        // Derive shared secret for this conversation
+        const sharedSecret = EncryptionService.deriveSharedSecret(myPrivateKey, recipientPublicKey);
+        console.log('✅ Shared secret derived');
+
+        // Encrypt message
+        const encryptedMsg = EncryptionService.encryptMessage(content, sharedSecret, myPublicKey);
+        console.log('✅ Message encrypted');
+
+        // Prepare request payload for direct message
+        payload = {
+          encryptedContent: encryptedMsg.ciphertext,
+          encryptionNonce: encryptedMsg.nonce,
+          senderPublicKey: encryptedMsg.senderPublicKey,
+          isEncrypted: true,
+          isGroupMessage: false, // Explicitly mark as direct message
+        };
+
+        decryptionKey = sharedSecret;
+
+        // Cache shared secret locally for conversation
+        EncryptionService.getOrCreateSharedSecret(conversationId, recipientId, myPrivateKey, recipientPublicKey);
       }
-      console.log('✅ Private key retrieved');
-
-      // Derive our actual public key from the private key (not from server)
-      // This ensures we use the exact same key that was used for ECDH
-      const myPublicKey: string = EncryptionService.getPublicKeyFromPrivateKey(myPrivateKey);
-      console.log('✅ My public key derived from private key');
-
-      // Fetch recipient public key from server
-      const recipientKeyResp = await KeyExchangeService.getPublicKey(recipientId);
-      if (!recipientKeyResp) {
-        return rejectWithValue(`❌ Recipient (${other.displayName}) has not initialized encryption yet. They must set up encryption first.`);
-      }
-      const recipientPublicKey: string = recipientKeyResp.publicKey;
-      console.log('✅ Recipient public key retrieved');
-
-      // Derive shared secret for this conversation
-      const sharedSecret = EncryptionService.deriveSharedSecret(myPrivateKey, recipientPublicKey);
-      console.log('✅ Shared secret derived');
-
-      // Encrypt message
-      const encryptedMsg = EncryptionService.encryptMessage(content, sharedSecret, myPublicKey);
-      console.log('✅ Message encrypted');
-      console.log('Encrypted data:', {
-        ciphertext: encryptedMsg.ciphertext,
-        nonce: encryptedMsg.nonce,
-        senderPublicKey: encryptedMsg.senderPublicKey,
-      });
-
-      // Prepare request payload
-      const payload = {
-        // content: content,
-        encryptedContent: encryptedMsg.ciphertext,
-        encryptionNonce: encryptedMsg.nonce,
-        senderPublicKey: encryptedMsg.senderPublicKey,
-        isEncrypted: true,
-      };
 
       console.log('📤 Sending message with payload:', payload);
 
@@ -264,48 +376,67 @@ export const sendMessage = createAsyncThunk(
       console.log('✅ Message sent successfully:', response.data);
 
       // Decrypt the message we just sent before storing it
-      // For sent messages, always decrypt if we have encrypted content, regardless of isEncrypted flag
       let decryptedMessage = response.data;
-      const hasEncryptedContent = response.data.encryptedContent && response.data.encryptionNonce && response.data.senderPublicKey;
       
-      if (hasEncryptedContent) {
+      if (conv.isGroup) {
+        // Decrypt group message
         try {
-          console.log('🔓 Decrypting sent message...');
-          console.log('Response data:', response.data);
-          console.log('Using sharedSecret derived from myPrivateKey and recipientPublicKey');
-          
-          const decryptedContent = EncryptionService.decryptMessage(
+          console.log('🔓 Decrypting sent group message...');
+          const decryptedContent = EncryptionService.decryptWithGroupKey(
             {
               ciphertext: response.data.encryptedContent,
               nonce: response.data.encryptionNonce,
-              senderPublicKey: response.data.senderPublicKey,
             },
-            sharedSecret
+            decryptionKey
           );
-          console.log('✅ Sent message decrypted successfully:', decryptedContent);
+          console.log('✅ Sent group message decrypted successfully:', decryptedContent);
           decryptedMessage = {
             ...response.data,
             content: decryptedContent,
             isEncrypted: true,
           };
         } catch (decryptError) {
-          console.error('❌ Failed to decrypt sent message:', decryptError);
-          console.error('Decryption error details:', decryptError instanceof Error ? decryptError.message : decryptError);
-          // If decryption fails, at least set content to a placeholder
+          console.error('❌ Failed to decrypt sent group message:', decryptError);
           decryptedMessage = {
             ...response.data,
-            content: `[Decryption Failed: ${decryptError instanceof Error ? decryptError.message : 'Unknown error'}]`,
+            content: content, // Use original content since we just encrypted it
             isEncrypted: true,
           };
+        }
+      } else {
+        // Decrypt direct message
+        const hasEncryptedContent = response.data.encryptedContent && response.data.encryptionNonce && response.data.senderPublicKey;
+        
+        if (hasEncryptedContent) {
+          try {
+            console.log('🔓 Decrypting sent direct message...');
+            const decryptedContent = EncryptionService.decryptMessage(
+              {
+                ciphertext: response.data.encryptedContent,
+                nonce: response.data.encryptionNonce,
+                senderPublicKey: response.data.senderPublicKey,
+              },
+              decryptionKey
+            );
+            console.log('✅ Sent direct message decrypted successfully:', decryptedContent);
+            decryptedMessage = {
+              ...response.data,
+              content: decryptedContent,
+              isEncrypted: true,
+            };
+          } catch (decryptError) {
+            console.error('❌ Failed to decrypt sent message:', decryptError);
+            decryptedMessage = {
+              ...response.data,
+              content: content, // Use original content
+              isEncrypted: true,
+            };
+          }
         }
       }
 
       // Return mapped message with decrypted content
       const message = mapMessage(decryptedMessage);
-
-      // Cache shared secret locally for conversation
-      EncryptionService.getOrCreateSharedSecret(conversationId, recipientId, myPrivateKey, recipientPublicKey);
-
       return message;
     } catch (error: any) {
       console.error('❌ Error sending message:', error);
@@ -381,6 +512,15 @@ const chatSlice = createSlice({
       })
       .addCase(sendMessage.rejected, (state, action) => {
         state.error = action.payload as string;
+      })
+      // Mark conversation as read
+      .addCase(markConversationAsRead.fulfilled, (state, action) => {
+        const conversationId = action.payload;
+        // Reset unread count for this conversation
+        const conversation = state.conversations.find(c => c.id === conversationId);
+        if (conversation) {
+          conversation.unreadCount = 0;
+        }
       });
   },
 });

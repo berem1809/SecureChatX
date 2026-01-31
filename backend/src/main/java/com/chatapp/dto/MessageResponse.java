@@ -15,11 +15,15 @@ import java.time.LocalDateTime;
 public class MessageResponse {
 
     private Long id;
-    private Long conversationId;
+    private Long conversationId;  // Contains either conversation ID or group ID
     private Long senderId;
     private String senderUsername;
     private String senderEmail;
     private String senderDisplayName;
+    
+    // Message type identification
+    private Boolean isGroup;      // true if this is a group message, false for direct message
+    private Long groupId;          // Only set if isGroup = true
     
     // For plain-text messages (deprecated, use encryptedContent instead)
     private String content;
@@ -38,11 +42,28 @@ public class MessageResponse {
     /**
      * Create response from Message entity
      * Includes encrypted content fields
+     * Handles both GROUP and DIRECT messages
      */
     public static MessageResponse fromEntity(Message message) {
         MessageResponse response = new MessageResponse();
         response.setId(message.getId());
-        response.setConversationId(message.getConversation().getId());
+        
+        // Determine if this is a group message or direct message
+        if (message.getGroup() != null) {
+            // GROUP MESSAGE
+            response.setIsGroup(true);
+            response.setGroupId(message.getGroup().getId());
+            response.setConversationId(message.getGroup().getId());  // For backward compatibility
+        } else if (message.getConversation() != null) {
+            // DIRECT MESSAGE
+            response.setIsGroup(false);
+            response.setGroupId(null);
+            response.setConversationId(message.getConversation().getId());
+        } else {
+            // Should never happen, but handle gracefully
+            throw new IllegalStateException("Message must belong to either a conversation or a group");
+        }
+        
         response.setSenderId(message.getSender().getId());
         response.setSenderUsername(message.getSender().getEmail());
         response.setSenderEmail(message.getSender().getEmail());
@@ -101,6 +122,12 @@ public class MessageResponse {
 
     public String getSenderPublicKey() { return senderPublicKey; }
     public void setSenderPublicKey(String senderPublicKey) { this.senderPublicKey = senderPublicKey; }
+    
+    public Boolean getIsGroup() { return isGroup; }
+    public void setIsGroup(Boolean isGroup) { this.isGroup = isGroup; }
+    
+    public Long getGroupId() { return groupId; }
+    public void setGroupId(Long groupId) { this.groupId = groupId; }
     
     // Deprecated field names (for backward compatibility)
     public String getCiphertext() { return encryptedContent; }

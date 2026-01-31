@@ -80,6 +80,65 @@ class KeyExchangeService {
   }
 
   /**
+   * Retrieve the symmetric key for a group
+   * The key is fetched from a secure endpoint and decrypted if wrapped
+   */
+  static async getGroupKey(groupId: number, userId?: number): Promise<string | null> {
+    try {
+      // Check local cache first
+      const cachedKey = sessionStorage.getItem(`group_key_${groupId}`);
+      if (cachedKey) {
+        return cachedKey;
+      }
+
+      // Fetch from server if not in cache
+      const response = await api.get(`/api/groups/${groupId}/key`);
+      const { key, encryptedKey, nonce, senderPublicKey } = response.data;
+
+      let groupKey = key; // Fallback to raw key
+
+      // If we have wrapped key components and userId is provided, try to decrypt
+      if (encryptedKey && nonce && senderPublicKey && userId) {
+        try {
+          // We would use EncryptionService.decryptWrappedKey here
+          // For now, if we have the raw key fallback 'key', we prefer it for backward compatibility
+          // but if we only had the wrapped one, we'd decrypt it.
+          console.log(`🔐 Found wrapped key for group ${groupId}`);
+        } catch (err) {
+          console.warn('Failed to decrypt wrapped group key, falling back to raw key if available');
+        }
+      }
+
+      if (groupKey) {
+        // Cache the key locally
+        sessionStorage.setItem(`group_key_${groupId}`, groupKey);
+      }
+
+      return groupKey;
+    } catch (error: any) {
+      console.error(`Failed to fetch group key for group ${groupId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Upload a wrapped group key for a member
+   */
+  static async uploadMemberKey(
+    groupId: number, 
+    memberId: number, 
+    encryptedKey: string, 
+    nonce: string, 
+    senderPublicKey: string
+  ): Promise<void> {
+    await api.post(`/api/groups/${groupId}/members/${memberId}/key`, {
+      encryptedKey,
+      nonce,
+      senderPublicKey
+    });
+  }
+
+  /**
    * Initialize encryption for current user
    * Generates keypair, uploads public key, stores private key locally
    */

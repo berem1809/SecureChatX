@@ -49,6 +49,7 @@ export interface Conversation {
   id: number;
   name?: string;
   isGroup: boolean;
+  groupId?: number; // For group conversations, this equals id
   participants: User[];
   lastMessage?: Message;
   // New fields matching backend ConversationResponse
@@ -57,6 +58,7 @@ export interface Conversation {
   otherParticipant?: User;
   createdAt?: string;
   lastMessageAt?: string;
+  unreadCount?: number; // Number of unread messages for current user
 }
 
 // Chat Request types - matches backend ChatRequestResponse
@@ -84,6 +86,9 @@ export interface GroupMember {
   displayName: string;
   role: 'ADMIN' | 'MEMBER';
   joinedAt: string;
+  encryptedGroupKey?: string;
+  keyNonce?: string;
+  senderPublicKey?: string;
 }
 
 export interface Group {

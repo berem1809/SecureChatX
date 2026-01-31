@@ -3,6 +3,7 @@ package com.chatapp.controller;
 import com.chatapp.dto.PublicKeyResponse;
 import com.chatapp.dto.PublicKeyUploadRequest;
 import com.chatapp.dto.ErrorResponse;
+import com.chatapp.exception.UserNotFoundException;
 import com.chatapp.repository.UserRepository;
 import com.chatapp.security.JwtTokenProvider;
 import com.chatapp.service.EncryptionService;
@@ -154,7 +155,7 @@ public class EncryptionController {
     private Long getUserIdFromAuth(Authentication authentication) {
         String email = authentication.getName();
         return userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"))
+            .orElseThrow(() -> UserNotFoundException.byEmail(email))
             .getId();
     }
 }

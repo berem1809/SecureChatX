@@ -15,6 +15,7 @@ import {
   Divider,
   Tabs,
   Tab,
+  Badge,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import PersonIcon from '@mui/icons-material/Person';
@@ -26,6 +27,7 @@ import {
   sendMessage,
   selectConversation,
   setChatType,
+  markConversationAsRead,
 } from '../store/slices/chatSlice';
 
 const ChatPage: React.FC = () => {
@@ -44,7 +46,9 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     if (selectedConversation) {
-      dispatch(fetchMessages(selectedConversation.id));
+      dispatch(fetchMessages({ conversationId: selectedConversation.id, isGroup: selectedConversation.isGroup || false }));
+      // Mark the conversation as read when selected
+      dispatch(markConversationAsRead(selectedConversation.id));
     }
   }, [selectedConversation, dispatch]);
 
@@ -117,13 +121,22 @@ const ChatPage: React.FC = () => {
               </ListItem>
             ) : (
               filteredConversations.map((conv) => {
-                // Get the other participant's info
-                const otherUser = conv.otherParticipant || 
-                  (conv.participants && conv.participants.length > 0 
-                    ? conv.participants[0] 
-                    : null);
-                const displayName = otherUser?.displayName || conv.name || 'Unknown User';
-                const email = otherUser?.email || '';
+                // For group conversations, use the group name; for direct chats, use other participant's name
+                let displayName = 'Unknown';
+                let email = '';
+                
+                if (conv.isGroup) {
+                  displayName = conv.name || 'Unknown Group';
+                } else {
+                  const otherUser = conv.otherParticipant || 
+                    (conv.participants && conv.participants.length > 0 
+                      ? conv.participants[0] 
+                      : null);
+                  displayName = otherUser?.displayName || 'Unknown User';
+                  email = otherUser?.email || '';
+                }
+                
+                const unreadCount = conv.unreadCount || 0;
                 
                 return (
                   <ListItemButton
@@ -132,19 +145,48 @@ const ChatPage: React.FC = () => {
                     onClick={() => dispatch(selectConversation(conv))}
                   >
                     <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: conv.isGroup ? 'success.main' : 'primary.main' }}>
-                        {conv.isGroup ? <GroupIcon /> : <PersonIcon />}
-                      </Avatar>
+                      <Badge 
+                        badgeContent={unreadCount} 
+                        color="error"
+                        max={99}
+                        sx={{ 
+                          '& .MuiBadge-badge': { 
+                            right: 4, 
+                            top: 4,
+                            fontSize: '0.7rem',
+                            minWidth: '18px',
+                            height: '18px',
+                          } 
+                        }}
+                      >
+                        <Avatar sx={{ bgcolor: conv.isGroup ? 'success.main' : 'primary.main' }}>
+                          {conv.isGroup ? <GroupIcon /> : <PersonIcon />}
+                        </Avatar>
+                      </Badge>
                     </ListItemAvatar>
                     <ListItemText
-                      primary={displayName}
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography 
+                            variant="body1" 
+                            sx={{ fontWeight: unreadCount > 0 ? 'bold' : 'normal' }}
+                          >
+                            {displayName}
+                          </Typography>
+                        </Box>
+                      }
                       secondary={
                         <Box component="span" sx={{ display: 'flex', flexDirection: 'column' }}>
                           <Typography variant="caption" color="text.secondary" noWrap>
                             {email}
                           </Typography>
                           {conv.lastMessage && (
-                            <Typography variant="caption" color="text.secondary" noWrap>
+                            <Typography 
+                              variant="caption" 
+                              color="text.secondary" 
+                              noWrap
+                              sx={{ fontWeight: unreadCount > 0 ? 'bold' : 'normal' }}
+                            >
                               {conv.lastMessage.content}
                             </Typography>
                           )}

@@ -20,6 +20,9 @@ public class GroupMemberResponse {
     private UserSearchResponse user;
     private GroupRole role;
     private LocalDateTime joinedAt;
+    private String encryptedGroupKey;
+    private String keyNonce;
+    private String senderPublicKey;
 
     // ========================================================================
     // CONSTRUCTORS
@@ -44,6 +47,9 @@ public class GroupMemberResponse {
         response.setUser(UserSearchResponse.fromUser(groupMember.getUser()));
         response.setRole(groupMember.getRole());
         response.setJoinedAt(groupMember.getJoinedAt());
+        response.setEncryptedGroupKey(groupMember.getEncryptedGroupKey());
+        response.setKeyNonce(groupMember.getKeyNonce());
+        response.setSenderPublicKey(groupMember.getSenderPublicKey());
         return response;
     }
 
@@ -65,4 +71,13 @@ public class GroupMemberResponse {
 
     public LocalDateTime getJoinedAt() { return joinedAt; }
     public void setJoinedAt(LocalDateTime joinedAt) { this.joinedAt = joinedAt; }
+
+    public String getEncryptedGroupKey() { return encryptedGroupKey; }
+    public void setEncryptedGroupKey(String encryptedGroupKey) { this.encryptedGroupKey = encryptedGroupKey; }
+
+    public String getKeyNonce() { return keyNonce; }
+    public void setKeyNonce(String keyNonce) { this.keyNonce = keyNonce; }
+
+    public String getSenderPublicKey() { return senderPublicKey; }
+    public void setSenderPublicKey(String senderPublicKey) { this.senderPublicKey = senderPublicKey; }
 }

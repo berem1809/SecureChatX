@@ -8,6 +8,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import com.chatapp.util.EncryptionUtil;
 
 /**
  * ============================================================================
@@ -79,6 +80,14 @@ public class Group {
     @Column(nullable = false, length = 500)
     private String description;
 
+    /**
+     * Symmetric key for group E2EE.
+     * Encrypted and stored securely.
+     * Nullable for existing groups - key will be generated on first access.
+     */
+    @Column(name = "group_key", length = 255)
+    private String groupKey;
+
     // ========================================================================
     // RELATIONSHIPS
     // ========================================================================
@@ -98,23 +107,31 @@ public class Group {
     private List<GroupMember> members = new ArrayList<>();
 
     /**
-     * All pending invitations for this group.
+     * The last message sent in this group.
+     * Used for displaying previews in the group list.
      */
-    @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<GroupInvitation> invitations = new ArrayList<>();
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "last_message_id")
+    private Message lastMessage;
 
     // ========================================================================
     // TIMESTAMPS
     // ========================================================================
 
-    @Column(name = "created_at", nullable = false)
+    /**
+     * When the group was created.
+     */
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * When the group was last updated (e.g., name change).
+     */
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     /**
-     * Timestamp of the last message in this group.
+     * Timestamp of the last message sent in the group.
      * Used for sorting groups by recent activity.
      */
     @Column(name = "last_message_at")
@@ -138,9 +155,13 @@ public class Group {
     // CONSTRUCTORS
     // ========================================================================
 
-    public Group() {}
+    public Group() {
+        this.createdAt = LocalDateTime.now();
+        this.groupKey = EncryptionUtil.generateSecureKey(32); // Generate a 256-bit key
+    }
 
     public Group(String name, String description, User createdBy) {
+        this(); // Call default constructor to set createdAt and generate key
         this.name = name;
         this.description = description;
         this.createdBy = createdBy;
@@ -150,30 +171,83 @@ public class Group {
     // GETTERS AND SETTERS
     // ========================================================================
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getName() {
+        return name;
+    }
 
-    public User getCreatedBy() { return createdBy; }
-    public void setCreatedBy(User createdBy) { this.createdBy = createdBy; }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-    public List<GroupMember> getMembers() { return members; }
-    public void setMembers(List<GroupMember> members) { this.members = members; }
+    public String getDescription() {
+        return description;
+    }
 
-    public List<GroupInvitation> getInvitations() { return invitations; }
-    public void setInvitations(List<GroupInvitation> invitations) { this.invitations = invitations; }
+    public void setDescription(String description) {
+        this.description = description;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getGroupKey() {
+        return groupKey;
+    }
 
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public void setGroupKey(String groupKey) {
+        this.groupKey = groupKey;
+    }
 
-    public LocalDateTime getLastMessageAt() { return lastMessageAt; }
-    public void setLastMessageAt(LocalDateTime lastMessageAt) { this.lastMessageAt = lastMessageAt; }
+    public User getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(User createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public List<GroupMember> getMembers() {
+        return members;
+    }
+
+    public void setMembers(List<GroupMember> members) {
+        this.members = members;
+    }
+
+    public Message getLastMessage() {
+        return lastMessage;
+    }
+
+    public void setLastMessage(Message lastMessage) {
+        this.lastMessage = lastMessage;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public LocalDateTime getLastMessageAt() {
+        return lastMessageAt;
+    }
+
+    public void setLastMessageAt(LocalDateTime lastMessageAt) {
+        this.lastMessageAt = lastMessageAt;
+    }
 }

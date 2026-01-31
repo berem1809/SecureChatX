@@ -34,6 +34,9 @@ public class MessageCreateRequest {
     
     // Flag indicating if message is encrypted
     private Boolean isEncrypted;
+    
+    // Flag indicating if this is a group message (helps with routing when IDs might collide)
+    private Boolean isGroupMessage;
 
     public MessageCreateRequest() {}
 
@@ -67,4 +70,7 @@ public class MessageCreateRequest {
     
     public Boolean getIsEncrypted() { return isEncrypted; }
     public void setIsEncrypted(Boolean isEncrypted) { this.isEncrypted = isEncrypted; }
+    
+    public Boolean getIsGroupMessage() { return isGroupMessage; }
+    public void setIsGroupMessage(Boolean isGroupMessage) { this.isGroupMessage = isGroupMessage; }
 }
