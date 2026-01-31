@@ -10,6 +10,8 @@ import com.chatapp.model.User;
 import com.chatapp.repository.ConversationMemberRepository;
 import com.chatapp.repository.ConversationRepository;
 import com.chatapp.repository.UserRepository;
+import com.chatapp.repository.GroupMemberRepository;
+import com.chatapp.repository.MessageRepository;
 import com.chatapp.util.ConversationValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,6 +49,12 @@ class ConversationServiceTest {
     @Mock
     private ConversationValidator conversationValidator;
 
+    @Mock
+    private GroupMemberRepository groupMemberRepository;
+
+    @Mock
+    private MessageRepository messageRepository;
+
     private ConversationService conversationService;
 
     private User user1;
@@ -58,8 +66,10 @@ class ConversationServiceTest {
         conversationService = new ConversationServiceImpl(
             conversationRepository,
             conversationMemberRepository,
+            groupMemberRepository,
             userRepository,
-            conversationValidator
+            conversationValidator,
+            messageRepository 
         );
 
         // Setup test users

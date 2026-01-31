@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * ============================================================================
@@ -61,6 +62,15 @@ public interface ConversationService {
     ConversationResponse getConversation(Long conversationId, Long userId);
     
     /**
+     * Marks a conversation as read for a user.
+     * Updates the lastReadAt timestamp.
+     * 
+     * @param conversationId The conversation ID (or group ID for groups)
+     * @param userId The user's ID
+     */
+    void markAsRead(Long conversationId, Long userId);
+    
+    /**
      * Gets a conversation between two specific users.
      * 
      * @param user1Id First user's ID
@@ -89,17 +99,23 @@ class ConversationServiceImpl implements ConversationService {
 
     private final ConversationRepository conversationRepository;
     private final ConversationMemberRepository conversationMemberRepository;
+    private final GroupMemberRepository groupMemberRepository;
     private final UserRepository userRepository;
     private final ConversationValidator conversationValidator;
+    private final MessageRepository messageRepository;
 
     public ConversationServiceImpl(ConversationRepository conversationRepository,
                                     ConversationMemberRepository conversationMemberRepository,
+                                    GroupMemberRepository groupMemberRepository,
                                     UserRepository userRepository,
-                                    ConversationValidator conversationValidator) {
+                                    ConversationValidator conversationValidator,
+                                    MessageRepository messageRepository) {
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
+        this.groupMemberRepository = groupMemberRepository;
         this.userRepository = userRepository;
         this.conversationValidator = conversationValidator;
+        this.messageRepository = messageRepository;
     }
 
     @Override
@@ -141,9 +157,52 @@ class ConversationServiceImpl implements ConversationService {
     public List<ConversationResponse> getUserConversations(Long userId) {
         logger.debug("Getting conversations for user {}", userId);
         
-        return conversationRepository.findByUserId(userId).stream()
-            .map(conv -> ConversationResponse.fromEntityWithCurrentUser(conv, userId))
+        // Get direct conversations with unread counts
+        List<ConversationResponse> conversations = conversationRepository.findByUserId(userId).stream()
+            .map(conv -> {
+                ConversationResponse response = ConversationResponse.fromEntityWithCurrentUser(conv, userId);
+                
+                // Calculate unread count for this conversation
+                ConversationMember member = conversationMemberRepository
+                    .findByConversationIdAndUserId(conv.getId(), userId)
+                    .orElse(null);
+                
+                if (member != null && member.getLastReadAt() != null) {
+                    long unreadCount = messageRepository.countUnreadInConversation(
+                        conv.getId(), userId, member.getLastReadAt());
+                    response.setUnreadCount(unreadCount);
+                } else {
+                    // If never read, count all messages not sent by this user
+                    long unreadCount = messageRepository.countByConversationIdAndSenderIdNot(conv.getId(), userId);
+                    response.setUnreadCount(unreadCount);
+                }
+                
+                return response;
+            })
             .collect(Collectors.toList());
+        
+        // Get group conversations (groups where user is a member) with unread counts
+        List<ConversationResponse> groupConversations = groupMemberRepository.findByUserId(userId).stream()
+            .map(member -> {
+                ConversationResponse response = ConversationResponse.fromGroup(member.getGroup());
+                
+                // Calculate unread count for this group
+                if (member.getLastReadAt() != null) {
+                    long unreadCount = messageRepository.countUnreadInGroup(
+                        member.getGroup().getId(), userId, member.getLastReadAt());
+                    response.setUnreadCount(unreadCount);
+                } else {
+                    // If never read, count all messages not sent by this user
+                    long unreadCount = messageRepository.countByGroupIdAndSenderIdNot(member.getGroup().getId(), userId);
+                    response.setUnreadCount(unreadCount);
+                }
+                
+                return response;
+            })
+            .collect(Collectors.toList());
+        
+        conversations.addAll(groupConversations);
+        return conversations;
     }
 
     @Override
@@ -168,5 +227,29 @@ class ConversationServiceImpl implements ConversationService {
     @Override
     public boolean conversationExists(Long user1Id, Long user2Id) {
         return conversationRepository.existsBetweenUsers(user1Id, user2Id);
+    }
+
+    @Override
+    @Transactional
+    public void markAsRead(Long conversationId, Long userId) {
+        logger.debug("Marking conversation/group {} as read for user {}", conversationId, userId);
+        
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        
+        // Try to mark direct conversation as read
+        conversationMemberRepository.findByConversationIdAndUserId(conversationId, userId)
+            .ifPresent(member -> {
+                member.setLastReadAt(now);
+                conversationMemberRepository.save(member);
+                logger.debug("Marked direct conversation {} as read for user {}", conversationId, userId);
+            });
+        
+        // Try to mark group as read
+        groupMemberRepository.findByGroupIdAndUserId(conversationId, userId)
+            .ifPresent(member -> {
+                member.setLastReadAt(now);
+                groupMemberRepository.save(member);
+                logger.debug("Marked group {} as read for user {}", conversationId, userId);
+            });
     }
 }

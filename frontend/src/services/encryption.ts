@@ -21,6 +21,11 @@ export interface EncryptedMessage {
   senderPublicKey: string; // Base64 encoded - for key derivation
 }
 
+export interface GroupEncryptedMessage {
+  ciphertext: string; // Base64 encoded encrypted content
+  nonce: string; // Base64 encoded
+}
+
 export interface SharedSecret {
   conversationId: number;
   otherUserId: number;
@@ -30,18 +35,35 @@ export interface SharedSecret {
 
 /**
  * Utility functions for base64 encoding/decoding
+ * Handles both standard and URL-safe Base64 formats
  */
 const encodeBase64 = (bytes: Uint8Array): string => {
   return btoa(String.fromCharCode(...Array.from(bytes)));
 };
 
 const decodeBase64 = (str: string): Uint8Array => {
-  const binaryString = atob(str);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
+  try {
+    // Convert URL-safe Base64 to standard Base64
+    // Replace URL-safe characters with standard Base64 characters
+    let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+    
+    // Add padding if needed (Base64 strings should be multiples of 4)
+    while (base64.length % 4 !== 0) {
+      base64 += '=';
+    }
+    
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  } catch (error) {
+    console.error('❌ Base64 decode error:', error);
+    console.error('   Input string:', str);
+    console.error('   Input length:', str.length);
+    throw new Error('Invalid Base64 string: ' + (error instanceof Error ? error.message : String(error)));
   }
-  return bytes;
 };
 
 class EncryptionService {
@@ -264,6 +286,13 @@ class EncryptionService {
         sessionStorage.removeItem(key);
       }
     });
+    
+    // Clear all cached group keys
+    Object.keys(sessionStorage).forEach((key) => {
+      if (key.startsWith('group_key_')) {
+        sessionStorage.removeItem(key);
+      }
+    });
   }
 
   /**
@@ -275,6 +304,113 @@ class EncryptionService {
     expectedSenderPublicKey: string
   ): boolean {
     return encryptedMessage.senderPublicKey === expectedSenderPublicKey;
+  }
+
+  /**
+   * Encrypt a message using a symmetric group key (XSalsa20-Poly1305)
+   * 
+   * @param plaintext The message to encrypt
+   * @param groupKey The base64-encoded group key (32 bytes)
+   * @returns Encrypted message with ciphertext and nonce
+   */
+  static encryptWithGroupKey(
+    plaintext: string,
+    groupKey: string
+  ): GroupEncryptedMessage {
+    console.log('🔐 Group encryption starting:');
+    console.log('  - plaintext length:', plaintext.length);
+    console.log('  - groupKey length:', groupKey.length);
+    console.log('  - groupKey (first 20 chars):', groupKey.substring(0, 20) + '...');
+    
+    try {
+      const keyBytes = decodeBase64(groupKey);
+      console.log('  - decoded key length (should be 32):', keyBytes.length);
+      
+      if (keyBytes.length !== 32) {
+        throw new Error(`Invalid key length: ${keyBytes.length} bytes (expected 32)`);
+      }
+      
+      const nonce = nacl.randomBytes(24);
+      const plaintextBytes = new TextEncoder().encode(plaintext);
+      
+      console.log('  - nonce length:', nonce.length);
+      console.log('  - plaintext bytes length:', plaintextBytes.length);
+
+      const ciphertext = nacl.secretbox(plaintextBytes, nonce, keyBytes);
+      
+      console.log('  - ciphertext length:', ciphertext.length);
+      console.log('✅ Group encryption successful');
+
+      return {
+        ciphertext: encodeBase64(ciphertext),
+        nonce: encodeBase64(nonce),
+      };
+    } catch (error) {
+      console.error('❌ Group encryption failed:', error);
+      throw new Error('Group message encryption failed: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  }
+
+  /**
+   * Decrypt a message using a symmetric group key (XSalsa20-Poly1305)
+   * 
+   * @param encryptedMessage The encrypted message with ciphertext and nonce
+   * @param groupKey The base64-encoded group key (32 bytes)
+   * @returns Decrypted plaintext message
+   */
+  static decryptWithGroupKey(
+    encryptedMessage: GroupEncryptedMessage,
+    groupKey: string
+  ): string {
+    console.log('🔐 Group decryption starting:');
+    console.log('  - groupKey length:', groupKey.length);
+    console.log('  - groupKey (first 20 chars):', groupKey.substring(0, 20) + '...');
+    console.log('  - ciphertext length:', encryptedMessage.ciphertext.length);
+    console.log('  - nonce length:', encryptedMessage.nonce.length);
+    
+    try {
+      const keyBytes = decodeBase64(groupKey);
+      console.log('  - decoded key length (should be 32):', keyBytes.length);
+      console.log('  - key hex (first 8 bytes):', Array.from(keyBytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+      
+      if (keyBytes.length !== 32) {
+        throw new Error(`Invalid key length: ${keyBytes.length} bytes (expected 32)`);
+      }
+      
+      const ciphertextBytes = decodeBase64(encryptedMessage.ciphertext);
+      const nonceBytes = decodeBase64(encryptedMessage.nonce);
+      
+      console.log('  - decoded ciphertext length:', ciphertextBytes.length);
+      console.log('  - decoded nonce length (should be 24):', nonceBytes.length);
+      console.log('  - ciphertext hex (first 8 bytes):', Array.from(ciphertextBytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+      console.log('  - nonce hex (first 8 bytes):', Array.from(nonceBytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+      
+      if (nonceBytes.length !== 24) {
+        throw new Error(`Invalid nonce length: ${nonceBytes.length} bytes (expected 24)`);
+      }
+
+      const plaintextBytes = nacl.secretbox.open(ciphertextBytes, nonceBytes, keyBytes);
+
+      if (!plaintextBytes) {
+        console.error('❌ nacl.secretbox.open returned null');
+        console.error('   This usually means:');
+        console.error('   1. Wrong decryption key (key mismatch)');
+        console.error('   2. Message was tampered with');
+        console.error('   3. Ciphertext or nonce is corrupted');
+        throw new Error('Decryption failed - nacl.secretbox.open returned null. Invalid key or tampered message.');
+      }
+
+      const result = new TextDecoder().decode(plaintextBytes);
+      console.log('✅ Group message decrypted successfully');
+      console.log('  - decrypted text length:', result.length);
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to decrypt group message:', error);
+      if (error instanceof Error) {
+        throw new Error('Group message decryption failed: ' + error.message);
+      }
+      throw new Error('Group message decryption failed.');
+    }
   }
 }
 

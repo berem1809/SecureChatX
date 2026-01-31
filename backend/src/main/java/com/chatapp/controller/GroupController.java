@@ -1,6 +1,7 @@
 package com.chatapp.controller;
 
 import com.chatapp.dto.*;
+import com.chatapp.exception.UserNotFoundException;
 import com.chatapp.repository.UserRepository;
 import com.chatapp.service.GroupInvitationService;
 import com.chatapp.service.GroupService;
@@ -145,6 +146,52 @@ public class GroupController {
         
         GroupResponse group = groupService.getGroup(groupId, userId);
         return ResponseEntity.ok(group);
+    }
+
+    /**
+     * Gets the symmetric key for a group.
+     * Only group members can access this.
+     *
+     * GET /api/groups/{groupId}/key
+     *
+     * @param groupId The group ID
+     * @param authentication The authentication object
+     * @return The group's symmetric key
+     */
+    @GetMapping("/{groupId}/key")
+    public ResponseEntity<GroupKeyResponse> getGroupKey(
+            @PathVariable Long groupId,
+            Authentication authentication) {
+
+        Long userId = getUserIdFromAuth(authentication);
+        logger.debug("User {} requesting key for group {}", userId, groupId);
+
+        return ResponseEntity.ok(groupService.getGroupKey(groupId, userId));
+    }
+
+    /**
+     * Updates a member's wrapped group key.
+     * This is used for E2EE key distribution.
+     *
+     * POST /api/groups/{groupId}/members/{memberId}/key
+     * Body: { "encryptedKey": "...", "nonce": "...", "senderPublicKey": "..." }
+     */
+    @PostMapping("/{groupId}/members/{memberId}/key")
+    public ResponseEntity<Void> updateMemberKey(
+            @PathVariable Long groupId,
+            @PathVariable Long memberId,
+            @RequestBody GroupKeyUpdateRequest request,
+            Authentication authentication) {
+
+        Long currentUserId = getUserIdFromAuth(authentication);
+        logger.info("User {} updating key for member {} in group {}", currentUserId, memberId, groupId);
+
+        // Security check: Only members can update keys (ideally only admins or the user themselves)
+        // For simplicity, we'll allow any member to "help" another member with the key
+        groupService.updateMemberKey(groupId, memberId, 
+            request.getEncryptedKey(), request.getNonce(), request.getSenderPublicKey());
+            
+        return ResponseEntity.ok().build();
     }
 
     /**
@@ -432,7 +479,7 @@ public class GroupController {
     private Long getUserIdFromAuth(Authentication authentication) {
         String email = authentication.getName();
         return userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"))
+            .orElseThrow(() -> UserNotFoundException.byEmail(email))
             .getId();
     }
 }

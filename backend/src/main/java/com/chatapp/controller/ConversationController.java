@@ -1,6 +1,7 @@
 package com.chatapp.controller;
 
 import com.chatapp.dto.ConversationResponse;
+import com.chatapp.exception.UserNotFoundException;
 import com.chatapp.repository.UserRepository;
 import com.chatapp.service.ConversationService;
 import org.slf4j.Logger;
@@ -129,12 +130,34 @@ public class ConversationController {
     }
 
     /**
+     * Marks a conversation as read for the current user.
+     * Updates the lastReadAt timestamp to now.
+     * 
+     * POST /api/conversations/{conversationId}/read
+     * 
+     * @param conversationId The conversation ID (or group ID)
+     * @param authentication The authentication object
+     * @return 200 OK
+     */
+    @PostMapping("/{conversationId}/read")
+    public ResponseEntity<Void> markAsRead(
+            @PathVariable Long conversationId,
+            Authentication authentication) {
+        
+        Long userId = getUserIdFromAuth(authentication);
+        logger.debug("Marking conversation/group {} as read for user {}", conversationId, userId);
+        
+        conversationService.markAsRead(conversationId, userId);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
      * Extracts the user ID from the authentication object.
      */
     private Long getUserIdFromAuth(Authentication authentication) {
         String email = authentication.getName();
         return userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"))
+            .orElseThrow(() -> UserNotFoundException.byEmail(email))
             .getId();
     }
 }

@@ -3,6 +3,7 @@ package com.chatapp.controller;
 import com.chatapp.dto.ChatRequestActionRequest;
 import com.chatapp.dto.ChatRequestCreateRequest;
 import com.chatapp.dto.ChatRequestResponse;
+import com.chatapp.exception.UserNotFoundException;
 import com.chatapp.repository.UserRepository;
 import com.chatapp.service.ChatRequestService;
 import jakarta.validation.Valid;
@@ -180,7 +181,7 @@ public class ChatRequestController {
     private Long getUserIdFromAuth(Authentication authentication) {
         String email = authentication.getName();
         return userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"))
+            .orElseThrow(() -> UserNotFoundException.byEmail(email))
             .getId();
     }
 }

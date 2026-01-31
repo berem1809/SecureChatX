@@ -109,6 +109,26 @@ public class GroupMember {
     @Column(name = "is_muted")
     private boolean muted = false;
 
+    /**
+     * The group symmetric key, encrypted with this member's public key.
+     * This allows the member to retrieve the group key using their private key.
+     */
+    @Column(name = "encrypted_group_key", length = 1024)
+    private String encryptedGroupKey;
+
+    /**
+     * Nonce used for encrypting the group key for this specific member.
+     */
+    @Column(name = "key_nonce", length = 100)
+    private String keyNonce;
+
+    /**
+     * The public key of the entity that encrypted the group key for this member.
+     * Usually the group creator's ephemeral public key.
+     */
+    @Column(name = "sender_public_key", length = 100)
+    private String senderPublicKey;
+
     // ========================================================================
     // JPA LIFECYCLE CALLBACKS
     // ========================================================================
@@ -165,4 +185,13 @@ public class GroupMember {
 
     public boolean isMuted() { return muted; }
     public void setMuted(boolean muted) { this.muted = muted; }
+
+    public String getEncryptedGroupKey() { return encryptedGroupKey; }
+    public void setEncryptedGroupKey(String encryptedGroupKey) { this.encryptedGroupKey = encryptedGroupKey; }
+
+    public String getKeyNonce() { return keyNonce; }
+    public void setKeyNonce(String keyNonce) { this.keyNonce = keyNonce; }
+
+    public String getSenderPublicKey() { return senderPublicKey; }
+    public void setSenderPublicKey(String senderPublicKey) { this.senderPublicKey = senderPublicKey; }
 }

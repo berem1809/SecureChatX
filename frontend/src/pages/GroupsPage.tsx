@@ -69,9 +69,12 @@ import api from '../services/api';
 
 interface GroupMember {
   id: number;
-  userId: number;
-  displayName: string;
-  email: string;
+  groupId: number;
+  user: {
+    id: number;
+    displayName: string;
+    email: string;
+  };
   role: 'ADMIN' | 'MEMBER';
   joinedAt: string;
 }
@@ -113,7 +116,7 @@ const GroupsPage: React.FC = () => {
   const isAdminForSelectedGroup = useMemo(() => {
     if (!selectedGroup || !currentUserId) return false;
     if (selectedGroup.role === 'ADMIN') return true;
-    return members.some((m) => m.userId === currentUserId && m.role === 'ADMIN');
+    return members.some((m) => m.user.id === currentUserId && m.role === 'ADMIN');
   }, [selectedGroup, currentUserId, members]);
 
   useEffect(() => {
@@ -213,7 +216,7 @@ const GroupsPage: React.FC = () => {
   /**
    * Remove a member from the group (admin only)
    */
-  const handleRemoveMember = async (memberId: number, memberName: string) => {
+  const handleRemoveMember = async (userId: number, memberName: string) => {
     if (!selectedGroup) return;
     
     if (!window.confirm(`Are you sure you want to remove ${memberName} from the group?`)) {
@@ -222,7 +225,7 @@ const GroupsPage: React.FC = () => {
 
     try {
       setIsLoading(true);
-      await api.delete(`/api/groups/${selectedGroup.id}/members/${memberId}`);
+      await api.delete(`/api/groups/${selectedGroup.id}/members/${userId}`);
       
       setSuccessMessage(`${memberName} removed from group`);
       await fetchGroupMembers(selectedGroup.id);
@@ -459,38 +462,60 @@ const GroupsPage: React.FC = () => {
                 allGroups.map((group) => {
                   const isMember = groups.some(g => g.id === group.id);
                   return (
-                    <ListItem key={group.id}>
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: 'secondary.main' }}>
-                          <GroupIcon />
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={group.name}
-                        secondary={
-                          <>
-                            <Typography component="span" variant="body2" color="text.secondary" display="block">
-                              {group.description}
-                            </Typography>
-                            <Typography component="span" variant="caption" color="text.secondary">
-                              {group.memberCount} member{group.memberCount !== 1 ? 's' : ''} • By {group.createdBy.displayName}
-                            </Typography>
-                          </>
-                        }
-                      />
-                      {isMember ? (
-                        <Chip label="Joined" color="success" size="small" />
-                      ) : (
-                        <Button
-                          variant="contained"
-                          size="small"
-                          startIcon={<SendIcon />}
-                          onClick={() => handleOpenJoinRequest(group)}
-                          disabled={isLoading}
-                        >
-                          Request to Join
-                        </Button>
-                      )}
+                    <ListItem 
+                      key={group.id}
+                      sx={{ 
+                        flexDirection: 'column', 
+                        alignItems: 'stretch',
+                        py: 2,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                            <GroupIcon />
+                          </Avatar>
+                        </ListItemAvatar>
+                        <Box sx={{ flex: 1, minWidth: 0, pr: 1 }}>
+                          <Typography variant="subtitle1" fontWeight="bold">
+                            {group.name}
+                          </Typography>
+                          <Typography 
+                            variant="body2" 
+                            color="text.secondary" 
+                            sx={{ 
+                              mb: 1,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                            }}
+                          >
+                            {group.description}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {group.memberCount} member{group.memberCount !== 1 ? 's' : ''} • By {group.createdBy.displayName}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
+                        {isMember ? (
+                          <Chip label="Joined" color="success" size="small" />
+                        ) : (
+                          <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<SendIcon />}
+                            onClick={() => handleOpenJoinRequest(group)}
+                            disabled={isLoading}
+                          >
+                            Request to Join
+                          </Button>
+                        )}
+                      </Box>
                     </ListItem>
                   );
                 })
@@ -518,62 +543,62 @@ const GroupsPage: React.FC = () => {
                       {new Date(selectedGroup.createdAt).toLocaleDateString()}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    {isAdminForSelectedGroup && (
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={() => setMemberDialogOpen(true)}
-                      >
-                        Invite Member
-                      </Button>
-                    )}
+                  <Box>
                     <Button
                       variant="outlined"
+                      color="error"
                       size="small"
                       startIcon={<ExitToAppIcon />}
                       onClick={() => handleLeaveGroup(selectedGroup)}
-                      disabled={isLoading}
+                      disabled={isLoading || (isAdminForSelectedGroup && members.length > 1)}
+                      title={isAdminForSelectedGroup && members.length > 1 
+                        ? "Admin can only leave after all members have left" 
+                        : "Leave this group"}
                     >
-                      Leave
+                      Leave Group
                     </Button>
+                    {isAdminForSelectedGroup && members.length > 1 && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                        Remove all members before leaving
+                      </Typography>
+                    )}
                   </Box>
                 </Box>
               </Box>
 
               {/* Members List */}
               <Box sx={{ overflow: 'auto', flex: 1 }}>
-                <Typography variant="subtitle1" sx={{ p: 2 }}>
-                  Members ({members.length})
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
+                  <Typography variant="subtitle1">
+                    Members ({members.length})
+                  </Typography>
+                  {isAdminForSelectedGroup && (
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => setMemberDialogOpen(true)}
+                    >
+                      + Invite
+                    </Button>
+                  )}
+                </Box>
                 <List>
                   {members.map((member) => (
                     <ListItem
                       key={member.id}
                       secondaryAction={
                         isAdminForSelectedGroup && member.role !== 'ADMIN' ? (
-                          <Box sx={{ display: 'flex', gap: 1 }}>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() =>
-                                handlePromoteMember(member.userId, member.displayName)
-                              }
-                            >
-                              Promote
-                            </Button>
-                            <Button
-                              size="small"
-                              color="error"
-                              variant="outlined"
-                              startIcon={<DeleteIcon />}
-                              onClick={() =>
-                                handleRemoveMember(member.userId, member.displayName)
-                              }
-                            >
-                              Remove
-                            </Button>
-                          </Box>
+                          <Button
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                            startIcon={<DeleteIcon />}
+                            onClick={() =>
+                              handleRemoveMember(member.user.id, member.user.displayName)
+                            }
+                          >
+                            Remove
+                          </Button>
                         ) : (
                           <Chip
                             size="small"
@@ -585,16 +610,16 @@ const GroupsPage: React.FC = () => {
                       }
                     >
                       <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                        <Avatar sx={{ bgcolor: member.role === 'ADMIN' ? 'warning.main' : 'secondary.main' }}>
                           <PersonIcon />
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
-                        primary={member.displayName}
+                        primary={`${member.user.displayName}${member.role === 'ADMIN' ? ' (Admin)' : ''}`}
                         secondary={
                           <>
                             <Typography component="span" variant="body2" color="text.secondary">
-                              {member.email}
+                              {member.user.email}
                             </Typography>
                             <br />
                             <Typography component="span" variant="caption" color="text.secondary">
