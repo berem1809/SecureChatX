@@ -1,103 +1,248 @@
-# Visual Diagrams: E2EE Chat System Architecture
+# SecureChatX - End-to-End Encrypted Chat Application
 
-## 1. Complete System Architecture
+A full-stack secure messaging application with **End-to-End Encryption (E2EE)**, built using **Spring Boot** and **React with TypeScript**. The server never sees your messages in plain text!
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         CHAT SYSTEM OVERVIEW                                │
-└─────────────────────────────────────────────────────────────────────────────┘
+---
 
-┌─────────────────────────────────┐
-│      FRONTEND (React/TS)         │
-├─────────────────────────────────┤
-│ ✓ App.tsx                        │
-│   └─ Auto-init encryption       │
-│                                 │
-│ ✓ ChatPage.tsx                 │
-│   ├─ Display conversations     │
-│   ├─ List messages             │
-│   └─ Send messages             │
-│                                 │
-│ ✓ Redux Store                  │
-│   ├─ User state                │
-│   ├─ Conversations             │
-│   └─ Messages (encrypted)      │
-└────────────┬────────────────────┘
-             │
-             │ HTTP/REST API
-             │
-┌────────────▼────────────────────┐
-│    BACKEND (Spring Boot)         │
-├─────────────────────────────────┤
-│ ✓ AuthController                │
-│   └─ POST /api/auth/login       │
-│                                 │
-│ ✓ CryptoController              │
-│   ├─ POST /api/crypto/keys      │
-│   └─ GET /api/crypto/keys/{id}  │
-│                                 │
-│ ✓ ConversationController        │
-│   ├─ GET /api/conversations     │
-│   └─ POST /api/conversations/{id}/messages
-│                                 │
-│ ✓ Services (Business Logic)     │
-│   ├─ UserService               │
-│   ├─ ConversationService       │
-│   └─ EncryptionService         │
-└────────────┬────────────────────┘
-             │
-             │ JPA/Hibernate
-             │
-┌────────────▼────────────────────┐
-│   DATABASE (MySQL)               │
-├─────────────────────────────────┤
-│ ✓ users                         │
-│ ✓ conversations                 │
-│ ✓ messages                      │
-│ ✓ user_encryption_keys         │
-└─────────────────────────────────┘
+## 📋 Table of Contents
 
+- [About the Project](#about-the-project)
+- [Key Features](#key-features)
+- [Tech Stack](#tech-stack)
+- [Requirements](#requirements)
+- [Getting Started](#getting-started)
+- [Project Structure](#project-structure)
+- [Architecture Overview](#architecture-overview)
 
-SECURITY LAYERS:
-═════════════════════════════════════════════════════════════════════════════════
+---
 
-Layer 1: Authentication          JWT Token ────→ Verify on each request
-Layer 2: Transport Security      HTTPS ────→ Encrypted in transit
-Layer 3: End-to-End Encryption   ECDH + XSalsa20-Poly1305 ────→ Server-blind
+## 🔐 About the Project
+
+**SecureChatX** is a privacy-focused chat application that implements true End-to-End Encryption. Messages are encrypted on the client side before being sent to the server, ensuring that only the intended recipients can read them. The server stores encrypted data and has no access to the plaintext content.
+
+This project demonstrates modern security practices including:
+- **ECDH Key Exchange** for establishing shared secrets
+- **XSalsa20-Poly1305** encryption for messages
+- **JWT-based authentication** with access and refresh tokens
+- **Redis-backed token management** with automatic expiration
+
+---
+
+## ✨ Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🔒 **End-to-End Encryption** | Messages encrypted client-side using ECDH + XSalsa20-Poly1305. Server-blind architecture. |
+| 👥 **User Management** | Registration, email verification, secure login with JWT tokens |
+| 💬 **Real-time Messaging** | WebSocket support for instant message delivery |
+| 📨 **Chat Requests** | Friend request system before starting conversations |
+| 👨‍👩‍👧‍👦 **Group Chats** | Create and manage group conversations with encrypted group keys |
+| 🔔 **Notifications** | Real-time notification system for new messages and requests |
+| 🛡️ **Rate Limiting** | Built-in protection against abuse with Bucket4j |
+| 📱 **Responsive UI** | Material UI components for a clean, modern interface |
+
+---
+
+## 🛠️ Tech Stack
+
+### Backend
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Java | 21 | Programming Language |
+| Spring Boot | 3.1.4 | Application Framework |
+| Spring Security | 6.x | Authentication & Authorization |
+| Spring Data JPA | 3.x | Database ORM |
+| MySQL | 8.x | Primary Database |
+| Redis | 7.x | Token Storage (TTL-based) |
+| JWT (jjwt) | 0.11.5 | Token Management |
+| Lombok | 1.18.30 | Code Generation |
+| Bucket4j | 8.7.0 | Rate Limiting |
+
+### Frontend
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| React | 18.2.0 | UI Library |
+| TypeScript | 5.2.2 | Type-Safe JavaScript |
+| Vite | 5.2.0 | Build Tool |
+| Redux Toolkit | 2.11.2 | State Management |
+| React Router | 7.11.0 | Client-Side Routing |
+| Material UI | 7.3.6 | UI Components |
+| Axios | 1.4.0 | HTTP Client |
+| TweetNaCl | 1.0.3 | Cryptographic Library |
+| Socket.io Client | 4.7.2 | WebSocket Client |
+
+---
+
+## 📌 Requirements
+
+### Software Prerequisites
+
+| Software | Minimum Version | Download Link |
+|----------|-----------------|---------------|
+| **JDK** | 21+ | [Oracle JDK](https://www.oracle.com/java/technologies/downloads/) / [OpenJDK](https://adoptium.net/) |
+| **Node.js** | 18+ | [Node.js](https://nodejs.org/) |
+| **npm** | 9+ | Comes with Node.js |
+| **MySQL** | 8.0+ | [MySQL](https://dev.mysql.com/downloads/) |
+| **Redis** | 7.0+ | [Redis](https://redis.io/download/) |
+| **Maven** | 3.8+ | [Maven](https://maven.apache.org/download.cgi) |
+
+### Verify Installation
+
+```bash
+# Check Java version
+java -version
+
+# Check Node.js version
+node -v
+
+# Check npm version
+npm -v
+
+# Check Maven version
+mvn -v
+
+# Check MySQL (after starting service)
+mysql --version
+
+# Check Redis (after starting service)
+redis-cli ping
 ```
 
 ---
 
-## 2. Message Flow: Send to Receive
+## 🚀 Getting Started
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/berem1809/SecureChatX.git
+cd SecureChatX
+```
+
+### 2. Database Setup
+
+```bash
+# Start MySQL service and create database
+mysql -u root -p
+```
+
+```sql
+CREATE DATABASE chat_springboot_app;
+EXIT;
+```
+
+### 3. Redis Setup
+
+```bash
+# Start Redis server
+redis-server
+
+# Verify Redis is running
+redis-cli ping
+# Should return: PONG
+```
+
+### 4. Backend Configuration
+
+Navigate to `backend/src/main/resources/application.properties` and update:
+
+```properties
+# MySQL Configuration
+spring.datasource.username=root
+spring.datasource.password=YOUR_MYSQL_PASSWORD
+
+# JWT Secret (generate a secure random string)
+app.jwt.secret=YOUR_JWT_SECRET_KEY
+
+# Gmail SMTP (for email verification)
+spring.mail.username=your-email@gmail.com
+spring.mail.password=your-app-password
+```
+
+### 5. Start Backend Server
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+Backend runs at: `http://localhost:8080`
+
+### 6. Start Frontend Development Server
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend runs at: `http://localhost:5173`
+
+---
+
+## 📁 Project Structure
+
+```
+chat-app/
+├── backend/                    # Spring Boot Backend
+│   ├── src/main/java/com/chatapp/
+│   │   ├── config/            # Security, Redis, Rate Limit configs
+│   │   ├── controller/        # REST API endpoints
+│   │   ├── dto/               # Data Transfer Objects
+│   │   ├── exception/         # Custom exceptions
+│   │   ├── filter/            # JWT filters
+│   │   ├── model/             # JPA Entities
+│   │   ├── repository/        # Data repositories
+│   │   ├── security/          # JWT utilities
+│   │   ├── service/           # Business logic
+│   │   └── util/              # Helper utilities
+│   └── src/main/resources/
+│       └── application.properties
+│
+├── frontend/                   # React + TypeScript Frontend
+│   ├── src/
+│   │   ├── components/        # Reusable UI components
+│   │   ├── context/           # React contexts
+│   │   ├── pages/             # Page components
+│   │   ├── services/          # API & encryption services
+│   │   ├── store/             # Redux store & slices
+│   │   └── types/             # TypeScript interfaces
+│   └── package.json
+│
+└── README.md                   # This file
+```
+
+---
+
+## 🏗️ Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    MESSAGE LIFECYCLE                                        │
+│                         SYSTEM ARCHITECTURE                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-ALICE SENDS MESSAGE TO BOB:
-═════════════════════════════════════════════════════════════════════════════════
+┌─────────────────────────────┐       ┌─────────────────────────────┐
+│   Frontend (React + TS)      │       │   Backend (Spring Boot)      │
+├─────────────────────────────┤       ├─────────────────────────────┤
+│ • E2E Encryption (TweetNaCl)│       │ • REST API Controllers      │
+│ • Redux State Management    │◄─────►│ • JWT Authentication        │
+│ • Material UI Components    │ HTTPS │ • WebSocket Support         │
+│ • React Router Navigation   │       │ • Business Services         │
+└─────────────────────────────┘       └──────────────┬──────────────┘
+                                                      │
+                                      ┌───────────────┼───────────────┐
+                                      │               │               │
+                               ┌──────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐
+                               │   MySQL      │ │   Redis      │ │   SMTP      │
+                               │   (Users,    │ │   (Tokens,   │ │   (Email    │
+                               │   Messages)  │ │   Sessions)  │ │   Verify)   │
+                               └─────────────┘ └─────────────┘ └─────────────┘
 
-Alice's Browser                  Server              Bob's Browser
-───────────────────              ──────              ─────────────
-
-1. User types "Hi Bob!"
-   │
-2. Click SEND
-   │
-3. Get Bob's public key
-   ├──── GET /api/crypto/keys/{bobId} ────→ Database lookup
-   │                                        │
-   │                     ← {publicKey} ←────┤
-   │
-4. Get own keys from localStorage
-   ├─ privateKey = localStorage['private_key_aliceId']
-   │
-5. Derive Shared Secret
-   ├─ secret = ECDH(alice_priv, bob_pub)
-   │
-6. Encrypt Message
-   ├─ nonce = random(24 bytes)
+SECURITY LAYERS:
+═══════════════════════════════════════════════════════════════════════════════
+Layer 1: Authentication       → JWT Token verification on each request
+Layer 2: Transport Security   → HTTPS encrypted in transit
+Layer 3: End-to-End Encryption → ECDH + XSalsa20-Poly1305 (Server-blind)
    ├─ ciphertext = XSalsa20(message, secret, nonce)
    ├─ mac = Poly1305(ciphertext, secret)
    │
